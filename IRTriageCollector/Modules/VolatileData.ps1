@@ -4,7 +4,7 @@ function Get-MemoryDump {
     Write-IRLog "Starting memory acquisition..."
     
     $memoryFile = Join-Path $OutputPath "memory.dmp"
-    $dumper = Join-Path $script:ToolsPath "DumpIt.exe"
+    $dumper = Join-Path $script:Config.ToolsPath "DumpIt.exe"
     
     if (Test-Path $dumper) {
         # Execute memory dumper
@@ -22,6 +22,23 @@ function Get-MemoryDump {
     } else {
         Write-IRLog "Memory dumper not found, skipping..." -Level Warning
     }
+}
+
+function Get-ProcessList {
+    param([string]$OutputPath)
+    
+    Write-IRLog "Collecting running processes..."
+    
+    $processes = Get-Process | Select-Object Name, Id, Path, Company, 
+        ProductVersion, StartTime, @{N='ParentProcessId';E={$_.Parent.Id}},
+        @{N='CommandLine';E={(Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)" -ErrorAction SilentlyContinue).CommandLine}}
+    
+    # Export to multiple formats
+    $processes | Export-Csv -Path (Join-Path $OutputPath "processes.csv") -NoTypeInformation
+    $processes | ConvertTo-Json | Out-File -FilePath (Join-Path $OutputPath "processes.json")
+    
+    Write-IRLog "Collected $($processes.Count) processes" -Level Success
+    return $processes
 }
 
 function Get-NetworkConnections {

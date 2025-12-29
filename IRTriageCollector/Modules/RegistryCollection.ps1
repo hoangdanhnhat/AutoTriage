@@ -15,7 +15,7 @@ function Get-RegistryHives {
         'DEFAULT' = 'C:\Windows\System32\config\DEFAULT'
     }
     
-    $rawCopy = Join-Path $script:ToolsPath "RawCopy.exe"
+    $rawCopy = Join-Path $script:Config.ToolsPath "RawCopy.exe"
     
     foreach ($hive in $hives.GetEnumerator()) {
         try {
@@ -34,7 +34,26 @@ function Get-RegistryHives {
             Write-IRLog "Failed to collect $($hive.Key): $_" -Level Error
         }
     }
+}
+
+function Get-UserRegistryHives {
+    param([string]$OutputPath)
     
-    # Also collect user hives
-    Get-UserRegistryHives -OutputPath $regPath
+    Write-IRLog "Collecting user registry hives..." -Level Info
+    
+    # Collect NTUSER.DAT from user profiles
+    $userProfiles = Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue
+    
+    foreach ($profile in $userProfiles) {
+        $ntuserPath = Join-Path $profile.FullName "NTUSER.DAT"
+        if (Test-Path $ntuserPath) {
+            try {
+                $destination = Join-Path $OutputPath "NTUSER_$($profile.Name).DAT"
+                Copy-Item -Path $ntuserPath -Destination $destination -ErrorAction Stop
+                Write-IRLog "Collected NTUSER.DAT for $($profile.Name)" -Level Success
+            } catch {
+                Write-IRLog "Failed to collect NTUSER.DAT for $($profile.Name): $_" -Level Warning
+            }
+        }
+    }
 }

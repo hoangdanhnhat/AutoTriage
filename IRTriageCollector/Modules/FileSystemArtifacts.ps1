@@ -24,7 +24,29 @@ function Get-BrowserHistory {
 
 function Get-StartupItems {
     param([string]$OutputPath)
-    # Collect autoruns, scheduled tasks, services
+    
+    Write-IRLog "Collecting startup items..." -Level Info
+    
+    $startupPath = Join-Path $OutputPath "Startup"
+    New-Item -ItemType Directory -Path $startupPath -Force | Out-Null
+    
+    # Collect scheduled tasks
+    try {
+        Get-ScheduledTask | Select-Object TaskName, TaskPath, State, Author, Description |
+            Export-Csv -Path (Join-Path $startupPath "scheduled_tasks.csv") -NoTypeInformation
+        Write-IRLog "Collected scheduled tasks" -Level Success
+    } catch {
+        Write-IRLog "Failed to collect scheduled tasks: $_" -Level Warning
+    }
+    
+    # Collect services
+    try {
+        Get-Service | Select-Object Name, DisplayName, Status, StartType, ServiceType |
+            Export-Csv -Path (Join-Path $startupPath "services.csv") -NoTypeInformation
+        Write-IRLog "Collected services" -Level Success
+    } catch {
+        Write-IRLog "Failed to collect services: $_" -Level Warning
+    }
 }
 
 function Get-RecentFiles {
