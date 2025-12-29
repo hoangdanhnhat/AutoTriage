@@ -40,8 +40,26 @@ function New-ChainOfCustody {
     # Export custody document
     $custody | ConvertTo-Json -Depth 5 | Out-File (Join-Path $OutputPath "ChainOfCustody.json")
     
-    # Create HTML report
-    New-HTMLReport -CustodyData $custody -OutputPath $OutputPath
-    
     Write-IRLog "Chain of custody documentation complete" -Level Success
+}
+
+function Compress-Collection {
+    param([string]$SourcePath)
+    
+    Write-IRLog "Compressing collection..." -Level Info
+    
+    $archivePath = "$SourcePath.zip"
+    
+    try {
+        Compress-Archive -Path $SourcePath -DestinationPath $archivePath -CompressionLevel Optimal -Force
+        
+        $archiveHash = Get-FileHash -Path $archivePath -Algorithm SHA256
+        Write-IRLog "Archive created: $archivePath" -Level Success
+        Write-IRLog "Archive hash (SHA256): $($archiveHash.Hash)" -Level Info
+        
+        return $archivePath
+    } catch {
+        Write-IRLog "Failed to compress collection: $_" -Level Error
+        return $null
+    }
 }
