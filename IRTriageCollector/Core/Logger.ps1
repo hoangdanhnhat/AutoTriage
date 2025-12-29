@@ -18,6 +18,8 @@ function Write-IRLog {
     Write-Host $logEntry -ForegroundColor $color
     
     # File output
-    $logFile = Join-Path $script:LogPath "IRCollection_$(Get-Date -Format 'yyyyMMdd').log"
-    Add-Content -Path $logFile -Value $logEntry
+    if ($script:Config -and $script:Config.LogPath) {
+        $logFile = Join-Path $script:Config.LogPath "IRCollection_$(Get-Date -Format 'yyyyMMdd').log"
+        Add-Content -Path $logFile -Value $logEntry -ErrorAction SilentlyContinue
+    }
 }
