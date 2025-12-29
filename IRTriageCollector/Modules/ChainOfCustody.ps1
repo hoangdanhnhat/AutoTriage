@@ -51,15 +51,30 @@ function Compress-Collection {
     $archivePath = "$SourcePath.zip"
     
     try {
-        Compress-Archive -Path $SourcePath -DestinationPath $archivePath -CompressionLevel Optimal -Force
+        # Load .NET compression assembly
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
         
-        $archiveHash = Get-FileHash -Path $archivePath -Algorithm SHA256
-        Write-IRLog "Archive created: $archivePath" -Level Success
-        Write-IRLog "Archive hash (SHA256): $($archiveHash.Hash)" -Level Info
+        # Use .NET ZipFile class which supports large files (Zip64)
+        # CompressionLevel: Optimal = 1
+        [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            $SourcePath, 
+            $archivePath, 
+            [System.IO.Compression.CompressionLevel]::Optimal, 
+            $false
+        )
         
-        return $archivePath
+        if (Test-Path $archivePath) {
+            $archiveSize = [math]::Round((Get-Item $archivePath).Length / 1GB, 2)
+            $archiveHash = Get-FileHash -Path $archivePath -Algorithm SHA256
+            Write-IRLog "Archive created: $archivePath ($archiveSize GB)" -Level Success
+            Write-IRLog "Archive hash (SHA256): $($archiveHash.Hash)" -Level Info
+            
+            return $archivePath
+        }
     } catch {
         Write-IRLog "Failed to compress collection: $_" -Level Error
+        Write-IRLog "Collection data is still available at: $SourcePath" -Level Warning
         return $null
     }
 }
+
