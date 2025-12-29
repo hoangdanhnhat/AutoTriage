@@ -1,10 +1,3 @@
-powershell<#
-.SYNOPSIS
-    Automated Incident Response Triage Collection Tool
-.DESCRIPTION
-    Collects volatile and non-volatile forensic artifacts from Windows systems
-#>
-
 param(
     [string]$OutputLocation,
     [switch]$SkipMemory,
