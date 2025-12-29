@@ -19,13 +19,13 @@ function Get-RegistryHives {
     
     foreach ($hive in $hives.GetEnumerator()) {
         try {
-            $destination = Join-Path $regPath "$($hive.Key)"
-            
             if (Test-Path $rawCopy) {
                 # Use RawCopy for locked files
-                Start-Process -FilePath $rawCopy -ArgumentList "/FileNamePath:$($hive.Value) /OutputPath:$destination" -Wait -NoNewWindow
+                # RawCopy syntax: /FileNamePath:<source> /OutputPath:<destination_directory>
+                Start-Process -FilePath $rawCopy -ArgumentList "/FileNamePath:$($hive.Value) /OutputPath:$regPath" -Wait -NoNewWindow
             } else {
                 # Fallback: reg save command
+                $destination = Join-Path $regPath "$($hive.Key)"
                 reg save "HKLM\$($hive.Key)" "$destination" /y | Out-Null
             }
             
