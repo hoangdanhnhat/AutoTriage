@@ -9,6 +9,7 @@ param(
 . "$PSScriptRoot\Logger.ps1"
 . "$PSScriptRoot\..\Utils\Validation.ps1"
 . "$PSScriptRoot\..\Modules\VolatileData.ps1"
+. "$PSScriptRoot\..\Modules\RegistryCollection.ps1"
 . "$PSScriptRoot\..\Modules\FileSystemArtifacts.ps1"
 . "$PSScriptRoot\..\Modules\ChainOfCustody.ps1"
 
@@ -54,9 +55,16 @@ function Start-IRCollection {
             $collectionMetadata.Modules += "Volatile Data"
         }
         
-        # 3. File system artifacts (includes registry, event logs, prefetch, etc.)
-        if ($script:Config.CollectPrefetch -or $script:Config.CollectRegistry -or $script:Config.CollectEventLogs) {
-            # Windows artifacts (registry hives, event logs, prefetch, etc.)
+        # 3. Registry hives (using RawCopy or reg save)
+        if ($script:Config.CollectRegistry) {
+            Get-RegistryHives -OutputPath $collectionPath
+            Get-UserRegistryHives -OutputPath $collectionPath
+            $collectionMetadata.Modules += "Registry Hives"
+        }
+        
+        # 4. File system artifacts (event logs, prefetch, user data, etc.)
+        if ($script:Config.CollectPrefetch -or $script:Config.CollectEventLogs) {
+            # Windows artifacts (event logs, prefetch, etc.)
             Get-WindowsArtifacts -OutputPath $collectionPath
             $collectionMetadata.Modules += "Windows Artifacts"
             

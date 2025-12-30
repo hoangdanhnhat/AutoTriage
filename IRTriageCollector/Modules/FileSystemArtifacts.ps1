@@ -78,7 +78,6 @@ function Get-UserArtifacts {
         
         # Define user-specific paths to collect
         $userPaths = @(
-            @{Source = "NTUSER.DAT"; Dest = "NTUSER.DAT"; Desc = "User registry hive"; IsFile = $true },
             @{Source = "AppData\Roaming\Microsoft\Windows\Recent"; Dest = "Recent"; Desc = "Recent files" },
             @{Source = "AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine"; Dest = "PSReadLine"; Desc = "PowerShell history" },
             @{Source = "AppData\Local\Microsoft\Windows\Explorer"; Dest = "Explorer"; Desc = "Explorer data" },
@@ -131,7 +130,6 @@ function Get-WindowsArtifacts {
     
     # Define specific paths to collect
     $paths = @(
-        @{Source = "C:\Windows\System32\config"; Dest = "System32\config"; Desc = "Registry hives" },
         @{Source = "C:\Windows\System32\winevt\Logs"; Dest = "System32\winevt\Logs"; Desc = "Event logs" },
         @{Source = "C:\Windows\Prefetch"; Dest = "Prefetch"; Desc = "Prefetch files" },
         @{Source = "C:\Windows\AppCompat\Programs"; Dest = "AppCompat\Programs"; Desc = "AppCompat data" },
