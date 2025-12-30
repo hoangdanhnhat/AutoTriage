@@ -225,20 +225,54 @@ function Get-NTFSArtifacts {
             Write-IRLog "Failed to collect `$MFT from drive ${driveLetter}: $_" -Level Warning
         }
         
-        # Collect UsnJrnl ($Extend\$UsnJrnl:$J)
+        # Collect UsnJrnl ($Extend\$UsnJrnl:$J) using PowerShell native method
         try {
             Write-IRLog "Collecting UsnJrnl from drive ${driveLetter}:" -Level Info
-            $journalPath = "${driveLetter}:\`$Extend\`$UsnJrnl:`$J"
-            $journalOutput = "UsnJrnl_${driveLetter}.bin"
+            $journalPath = "\\.\${driveLetter}:\`$Extend\`$UsnJrnl:`$J"
+            $journalOutput = Join-Path $driveDestPath "UsnJrnl_${driveLetter}.bin"
             
-            # RawCopy syntax for alternate data streams
-            $arguments = "/FileNamePath:`"$journalPath`" /OutputPath:`"$driveDestPath`" /OutputName:`"$journalOutput`""
-            Start-Process -FilePath $rawCopy -ArgumentList $arguments -Wait -NoNewWindow -ErrorAction Stop
+            # Use .NET FileStream to read the alternate data stream
+            # This is more reliable than RawCopy for ADS
+            $bufferSize = 1MB
+            $buffer = New-Object byte[] $bufferSize
             
-            $journalFile = Join-Path $driveDestPath $journalOutput
-            if (Test-Path $journalFile) {
-                $size = [math]::Round((Get-Item $journalFile).Length / 1MB, 2)
-                Write-IRLog "Successfully collected UsnJrnl from ${driveLetter}: ($size MB)" -Level Success
+            $sourceStream = $null
+            $destStream = $null
+            
+            try {
+                # Open the source stream (USN Journal ADS)
+                $sourceStream = New-Object System.IO.FileStream(
+                    $journalPath,
+                    [System.IO.FileMode]::Open,
+                    [System.IO.FileAccess]::Read,
+                    [System.IO.FileShare]::ReadWrite
+                )
+                
+                # Open the destination stream
+                $destStream = New-Object System.IO.FileStream(
+                    $journalOutput,
+                    [System.IO.FileMode]::Create,
+                    [System.IO.FileAccess]::Write,
+                    [System.IO.FileShare]::None
+                )
+                
+                # Copy data in chunks
+                $totalBytes = 0
+                while (($bytesRead = $sourceStream.Read($buffer, 0, $bufferSize)) -gt 0) {
+                    $destStream.Write($buffer, 0, $bytesRead)
+                    $totalBytes += $bytesRead
+                }
+                
+                $destStream.Flush()
+                
+                if (Test-Path $journalOutput) {
+                    $size = [math]::Round($totalBytes / 1MB, 2)
+                    Write-IRLog "Successfully collected UsnJrnl from ${driveLetter}: ($size MB)" -Level Success
+                }
+            }
+            finally {
+                if ($sourceStream) { $sourceStream.Close(); $sourceStream.Dispose() }
+                if ($destStream) { $destStream.Close(); $destStream.Dispose() }
             }
         }
         catch {
