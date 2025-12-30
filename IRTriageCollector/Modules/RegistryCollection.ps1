@@ -47,6 +47,8 @@ function Get-UserRegistryHives {
     $regPath = Join-Path $OutputPath "Registry"
     New-Item -ItemType Directory -Path $regPath -Force | Out-Null
     
+    $rawCopy = Join-Path $script:Config.ToolsPath "RawCopy.exe"
+    
     # Collect NTUSER.DAT from user profiles
     $userProfiles = Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue
     
@@ -55,8 +57,19 @@ function Get-UserRegistryHives {
         if (Test-Path $ntuserPath) {
             try {
                 $destination = Join-Path $regPath "NTUSER_$($profile.Name).DAT"
-                Copy-Item -Path $ntuserPath -Destination $destination -ErrorAction Stop
-                Write-IRLog "Collected NTUSER.DAT for $($profile.Name)" -Level Success
+                
+                if (Test-Path $rawCopy) {
+                    # Use RawCopy for locked files
+                    # RawCopy syntax: /FileNamePath:<source> /OutputPath:<destination_directory> /OutputName:<filename>
+                    $outputName = "NTUSER_$($profile.Name).DAT"
+                    Start-Process -FilePath $rawCopy -ArgumentList "/FileNamePath:`"$ntuserPath`" /OutputPath:`"$regPath`" /OutputName:`"$outputName`"" -Wait -NoNewWindow -ErrorAction Stop
+                    Write-IRLog "Collected NTUSER.DAT for $($profile.Name) using RawCopy" -Level Success
+                }
+                else {
+                    # Fallback to regular copy (may fail for locked files)
+                    Copy-Item -Path $ntuserPath -Destination $destination -ErrorAction Stop
+                    Write-IRLog "Collected NTUSER.DAT for $($profile.Name)" -Level Success
+                }
             }
             catch {
                 Write-IRLog "Failed to collect NTUSER.DAT for $($profile.Name): $_" -Level Warning

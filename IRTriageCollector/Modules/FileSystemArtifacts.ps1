@@ -128,11 +128,13 @@ function Get-WindowsArtifacts {
     $windowsBasePath = Join-Path $OutputPath "Windows"
     New-Item -ItemType Directory -Path $windowsBasePath -Force | Out-Null
     
+    $rawCopy = Join-Path $script:Config.ToolsPath "RawCopy.exe"
+    
     # Define specific paths to collect
     $paths = @(
         @{Source = "C:\Windows\System32\winevt\Logs"; Dest = "System32\winevt\Logs"; Desc = "Event logs" },
         @{Source = "C:\Windows\Prefetch"; Dest = "Prefetch"; Desc = "Prefetch files" },
-        @{Source = "C:\Windows\AppCompat\Programs"; Dest = "AppCompat\Programs"; Desc = "AppCompat data" },
+        @{Source = "C:\Windows\AppCompat\Programs"; Dest = "AppCompat\Programs"; Desc = "AppCompat data"; HasLockedFiles = $true },
         @{Source = "C:\Windows\Tasks"; Dest = "Tasks"; Desc = "Scheduled tasks" },
         @{Source = "C:\Windows\System32\drivers\etc"; Dest = "System32\drivers\etc"; Desc = "Hosts file and network config" }
     )
@@ -143,7 +145,26 @@ function Get-WindowsArtifacts {
                 $destPath = Join-Path $windowsBasePath $path.Dest
                 New-Item -ItemType Directory -Path $destPath -Force | Out-Null
                 
-                Copy-Item -Path "$($path.Source)\*" -Destination $destPath -Recurse -Force -ErrorAction SilentlyContinue
+                # Special handling for AppCompat (contains locked Amcache.hve)
+                if ($path.HasLockedFiles -and (Test-Path $rawCopy)) {
+                    # Copy Amcache.hve using RawCopy
+                    $amcachePath = Join-Path $path.Source "Amcache.hve"
+                    if (Test-Path $amcachePath) {
+                        Start-Process -FilePath $rawCopy -ArgumentList "/FileNamePath:`"$amcachePath`" /OutputPath:`"$destPath`"" -Wait -NoNewWindow -ErrorAction SilentlyContinue
+                    }
+                    
+                    # Copy other files normally
+                    Get-ChildItem -Path $path.Source -File -ErrorAction SilentlyContinue | 
+                    Where-Object { $_.Name -ne "Amcache.hve" } | 
+                    ForEach-Object {
+                        Copy-Item -Path $_.FullName -Destination $destPath -Force -ErrorAction SilentlyContinue
+                    }
+                }
+                else {
+                    # Regular copy for other directories
+                    Copy-Item -Path "$($path.Source)\*" -Destination $destPath -Recurse -Force -ErrorAction SilentlyContinue
+                }
+                
                 $count = (Get-ChildItem $destPath -Recurse -File -ErrorAction SilentlyContinue).Count
                 Write-IRLog "Collected $count files from $($path.Desc)" -Level Success
             }
