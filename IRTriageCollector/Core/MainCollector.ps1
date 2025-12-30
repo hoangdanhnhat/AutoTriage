@@ -9,8 +9,6 @@ param(
 . "$PSScriptRoot\Logger.ps1"
 . "$PSScriptRoot\..\Utils\Validation.ps1"
 . "$PSScriptRoot\..\Modules\VolatileData.ps1"
-. "$PSScriptRoot\..\Modules\RegistryCollection.ps1"
-. "$PSScriptRoot\..\Modules\EventLogCollection.ps1"
 . "$PSScriptRoot\..\Modules\FileSystemArtifacts.ps1"
 . "$PSScriptRoot\..\Modules\ChainOfCustody.ps1"
 
@@ -38,7 +36,7 @@ function Start-IRCollection {
     
     $collectionMetadata = @{
         StartTime = Get-Date
-        Modules = @()
+        Modules   = @()
     }
     
     # Collection sequence (order by volatility)
@@ -46,7 +44,7 @@ function Start-IRCollection {
         # 1. Memory (most volatile)
         if (-not $SkipMemory -and $script:Config.CollectMemory) {
             $memResult = Get-MemoryDump -OutputPath $collectionPath
-            $collectionMetadata.Modules += @{Name="Memory"; Result=$memResult}
+            $collectionMetadata.Modules += @{Name = "Memory"; Result = $memResult }
         }
         
         # 2. Running processes and network
@@ -56,23 +54,19 @@ function Start-IRCollection {
             $collectionMetadata.Modules += "Volatile Data"
         }
         
-        # 3. Registry hives
-        if ($script:Config.CollectRegistry) {
-            Get-RegistryHives -OutputPath $collectionPath
-            $collectionMetadata.Modules += "Registry"
-        }
-        
-        # 4. Event logs
-        if ($script:Config.CollectEventLogs) {
-            Get-EventLogsCollection -OutputPath $collectionPath
-            $collectionMetadata.Modules += "Event Logs"
-        }
-        
-        # 5. File system artifacts
-        if ($script:Config.CollectPrefetch) {
-            Get-PrefetchFiles -OutputPath $collectionPath
-            Get-StartupItems -OutputPath $collectionPath
-            $collectionMetadata.Modules += "File System Artifacts"
+        # 3. File system artifacts (includes registry, event logs, prefetch, etc.)
+        if ($script:Config.CollectPrefetch -or $script:Config.CollectRegistry -or $script:Config.CollectEventLogs) {
+            # Windows artifacts (registry hives, event logs, prefetch, etc.)
+            Get-WindowsArtifacts -OutputPath $collectionPath
+            $collectionMetadata.Modules += "Windows Artifacts"
+            
+            # User profile artifacts (NTUSER.DAT, browser data, recent files, etc.)
+            Get-UserArtifacts -OutputPath $collectionPath
+            $collectionMetadata.Modules += "User Artifacts"
+            
+            # ProgramData artifacts (startup items, WER, Defender, 3rd party apps)
+            Get-ProgramDataArtifacts -OutputPath $collectionPath
+            $collectionMetadata.Modules += "ProgramData Artifacts"
         }
         
         # Generate chain of custody
@@ -88,7 +82,8 @@ function Start-IRCollection {
         Write-Host "Total time: $([math]::Round($collectionMetadata.Duration, 2)) minutes"
         Write-Host "Output: $collectionPath"
         
-    } catch {
+    }
+    catch {
         Write-IRLog "Collection failed: $_" -Level Error
         throw
     }

@@ -11,14 +11,18 @@ An automated Incident Response (IR) triage collection tool for Windows systems t
 - **File System Artifacts**: Prefetch files, startup items, scheduled tasks
 - **Chain of Custody**: Automated documentation with file hashes
 - **Compression**: Automatic ZIP archive creation
+- **Ansible Deployment**: Remote deployment and execution on multiple Windows hosts
 
 ## Prerequisites
 
 - **Windows OS** (tested on Windows 10/11)
 - **PowerShell 5.1+**
 - **Administrator Privileges** (required)
+- **Ansible** (optional, for remote deployment)
 
 ## Quick Start
+
+### Option 1: Local Execution
 
 ### 1. Open PowerShell as Administrator
 
@@ -62,6 +66,30 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 ```powershell
 .\MainCollector.ps1 -SkipMemory -OutputLocation "D:\Evidence"
 ```
+
+### Option 2: Remote Deployment with Ansible
+
+For deploying and executing on multiple Windows hosts remotely:
+
+```bash
+# Navigate to ansible directory
+cd ansible
+
+# Edit inventory.yml to add your Windows hosts
+nano inventory.yml
+
+# Test connectivity
+ansible windows_targets -i inventory.yml -m win_ping
+
+# Deploy and execute
+ansible-playbook -i inventory.yml playbook.yml
+
+# Quick deployment (skip memory)
+ansible-playbook -i inventory.yml quick-deploy.yml
+```
+
+**See [ansible/README.md](ansible/README.md) for detailed Ansible deployment guide.**
+
 
 ## Output
 
