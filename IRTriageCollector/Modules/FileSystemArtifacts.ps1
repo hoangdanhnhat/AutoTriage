@@ -177,3 +177,74 @@ function Get-WindowsArtifacts {
         }
     }
 }
+
+function Get-NTFSArtifacts {
+    param([string]$OutputPath)
+    
+    Write-IRLog "Collecting NTFS artifacts (MFT and Journal)..." -Level Info
+    
+    $ntfsBasePath = Join-Path $OutputPath "NTFS"
+    New-Item -ItemType Directory -Path $ntfsBasePath -Force | Out-Null
+    
+    $rawCopy = Join-Path $script:Config.ToolsPath "RawCopy.exe"
+    
+    if (-not (Test-Path $rawCopy)) {
+        Write-IRLog "RawCopy.exe not found. Cannot collect NTFS artifacts (MFT and Journal are locked files)." -Level Error
+        return
+    }
+    
+    # Get all fixed drives
+    $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { 
+        $_.Root -match '^[A-Z]:\\$' -and (Test-Path $_.Root)
+    }
+    
+    foreach ($drive in $drives) {
+        $driveLetter = $drive.Name
+        Write-IRLog "Collecting NTFS artifacts from drive $driveLetter..." -Level Info
+        
+        $driveDestPath = Join-Path $ntfsBasePath $driveLetter
+        New-Item -ItemType Directory -Path $driveDestPath -Force | Out-Null
+        
+        # Collect MFT ($MFT)
+        try {
+            Write-IRLog "Collecting `$MFT from drive ${driveLetter}:" -Level Info
+            $mftPath = "${driveLetter}:\`$MFT"
+            $mftOutput = "MFT_${driveLetter}.bin"
+            
+            # RawCopy syntax: /FileNamePath:<source> /OutputPath:<destination_directory> /OutputName:<filename>
+            $arguments = "/FileNamePath:`"$mftPath`" /OutputPath:`"$driveDestPath`" /OutputName:`"$mftOutput`""
+            Start-Process -FilePath $rawCopy -ArgumentList $arguments -Wait -NoNewWindow -ErrorAction Stop
+            
+            $mftFile = Join-Path $driveDestPath $mftOutput
+            if (Test-Path $mftFile) {
+                $size = [math]::Round((Get-Item $mftFile).Length / 1MB, 2)
+                Write-IRLog "Successfully collected `$MFT from ${driveLetter}: ($size MB)" -Level Success
+            }
+        }
+        catch {
+            Write-IRLog "Failed to collect `$MFT from drive ${driveLetter}: $_" -Level Warning
+        }
+        
+        # Collect UsnJrnl ($Extend\$UsnJrnl:$J)
+        try {
+            Write-IRLog "Collecting UsnJrnl from drive ${driveLetter}:" -Level Info
+            $journalPath = "${driveLetter}:\`$Extend\`$UsnJrnl:`$J"
+            $journalOutput = "UsnJrnl_${driveLetter}.bin"
+            
+            # RawCopy syntax for alternate data streams
+            $arguments = "/FileNamePath:`"$journalPath`" /OutputPath:`"$driveDestPath`" /OutputName:`"$journalOutput`""
+            Start-Process -FilePath $rawCopy -ArgumentList $arguments -Wait -NoNewWindow -ErrorAction Stop
+            
+            $journalFile = Join-Path $driveDestPath $journalOutput
+            if (Test-Path $journalFile) {
+                $size = [math]::Round((Get-Item $journalFile).Length / 1MB, 2)
+                Write-IRLog "Successfully collected UsnJrnl from ${driveLetter}: ($size MB)" -Level Success
+            }
+        }
+        catch {
+            Write-IRLog "Failed to collect UsnJrnl from drive ${driveLetter}: $_" -Level Warning
+        }
+    }
+    
+    Write-IRLog "NTFS artifact collection completed" -Level Success
+}

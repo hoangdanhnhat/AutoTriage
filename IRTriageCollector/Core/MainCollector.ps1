@@ -75,6 +75,10 @@ function Start-IRCollection {
             # ProgramData artifacts (startup items, WER, Defender, 3rd party apps)
             Get-ProgramDataArtifacts -OutputPath $collectionPath
             $collectionMetadata.Modules += "ProgramData Artifacts"
+            
+            # NTFS artifacts (MFT and Journal)
+            Get-NTFSArtifacts -OutputPath $collectionPath
+            $collectionMetadata.Modules += "NTFS Artifacts"
         }
         
         # Generate chain of custody
