@@ -225,29 +225,29 @@ function Get-NTFSArtifacts {
             Write-IRLog "Failed to collect `$MFT from drive ${driveLetter}: $_" -Level Warning
         }
         
-        # Collect UsnJrnl ($Extend\$UsnJrnl:$J) using FSUTIL
-        try {
-            Write-IRLog "Collecting UsnJrnl from drive ${driveLetter}:" -Level Info
-            $journalOutput = Join-Path $driveDestPath "UsnJrnl_${driveLetter}.csv"
+        # Collect UsnJrnl ($Extend\$UsnJrnl:$J) using FSUTIL TODO: implement later!!!! 
+        # try {
+        #     Write-IRLog "Collecting UsnJrnl from drive ${driveLetter}:" -Level Info
+        #     $journalOutput = Join-Path $driveDestPath "UsnJrnl_${driveLetter}.csv"
             
-            # Use FSUTIL to read the USN Journal
-            # FSUTIL is a built-in Windows tool with proper privileges
-            $fsutilArgs = "usn readjournal ${driveLetter}: csv"
+        #     # Use FSUTIL to read the USN Journal
+        #     # FSUTIL is a built-in Windows tool with proper privileges
+        #     $fsutilArgs = "usn readjournal ${driveLetter}: csv"
             
-            # Execute FSUTIL and save output
-            $process = Start-Process -FilePath "fsutil.exe" -ArgumentList $fsutilArgs -Wait -NoNewWindow -PassThru -RedirectStandardOutput $journalOutput -ErrorAction Stop
+        #     # Execute FSUTIL and save output
+        #     $process = Start-Process -FilePath "fsutil.exe" -ArgumentList $fsutilArgs -Wait -NoNewWindow -PassThru -RedirectStandardOutput $journalOutput -ErrorAction Stop
             
-            if ($process.ExitCode -eq 0 -and (Test-Path $journalOutput)) {
-                $size = [math]::Round((Get-Item $journalOutput).Length / 1MB, 2)
-                Write-IRLog "Successfully collected UsnJrnl from ${driveLetter}: ($size MB)" -Level Success
-            }
-            else {
-                Write-IRLog "FSUTIL returned exit code $($process.ExitCode)" -Level Warning
-            }
-        }
-        catch {
-            Write-IRLog "Failed to collect UsnJrnl from drive ${driveLetter}: $_" -Level Warning
-        }
+        #     if ($process.ExitCode -eq 0 -and (Test-Path $journalOutput)) {
+        #         $size = [math]::Round((Get-Item $journalOutput).Length / 1MB, 2)
+        #         Write-IRLog "Successfully collected UsnJrnl from ${driveLetter}: ($size MB)" -Level Success
+        #     }
+        #     else {
+        #         Write-IRLog "FSUTIL returned exit code $($process.ExitCode)" -Level Warning
+        #     }
+        # }
+        # catch {
+        #     Write-IRLog "Failed to collect UsnJrnl from drive ${driveLetter}: $_" -Level Warning
+        # }
     }
     
     Write-IRLog "NTFS artifact collection completed" -Level Success

@@ -49,7 +49,7 @@ function Start-IRCollection {
         }
         
         # 2. Running processes and network
-        if ($script:Config.CollectNetworkData) {
+        if ($script:Config.CollectVolatileData) {
             Get-ProcessList -OutputPath $collectionPath
             Get-NetworkConnections -OutputPath $collectionPath
             $collectionMetadata.Modules += "Volatile Data"
@@ -63,20 +63,26 @@ function Start-IRCollection {
         }
         
         # 4. File system artifacts (event logs, prefetch, user data, etc.)
-        if ($script:Config.CollectPrefetch -or $script:Config.CollectEventLogs) {
-            # Windows artifacts (event logs, prefetch, etc.)
+        # Windows artifacts (event logs, prefetch, etc.)
+        if ($script:Config.CollectWindowsArtifacts) {
             Get-WindowsArtifacts -OutputPath $collectionPath
             $collectionMetadata.Modules += "Windows Artifacts"
-            
-            # User profile artifacts (NTUSER.DAT, browser data, recent files, etc.)
+        }
+        
+        # User profile artifacts (NTUSER.DAT, browser data, recent files, etc.)
+        if ($script:Config.CollectUserArtifacts) {
             Get-UserArtifacts -OutputPath $collectionPath
             $collectionMetadata.Modules += "User Artifacts"
-            
-            # ProgramData artifacts (startup items, WER, Defender, 3rd party apps)
+        }
+        
+        # ProgramData artifacts (startup items, WER, Defender, 3rd party apps)
+        if ($script:Config.CollectProgramData) {
             Get-ProgramDataArtifacts -OutputPath $collectionPath
             $collectionMetadata.Modules += "ProgramData Artifacts"
-            
-            # NTFS artifacts (MFT and Journal)
+        }
+        
+        # NTFS artifacts (MFT and Journal)
+        if ($script:Config.CollectNTFS) {
             Get-NTFSArtifacts -OutputPath $collectionPath
             $collectionMetadata.Modules += "NTFS Artifacts"
         }
