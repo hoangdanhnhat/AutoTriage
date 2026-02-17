@@ -1,7 +1,8 @@
 param(
     [string]$OutputLocation,
     [switch]$SkipMemory,
-    [switch]$QuickMode
+    [switch]$QuickMode,
+    [switch]$Compress
 )
 
 # Import all modules
@@ -94,8 +95,10 @@ function Start-IRCollection {
         New-ChainOfCustody -OutputPath $collectionPath -CollectionMetadata $collectionMetadata
         
         # Compress collection
+        if ($Compress -or $script:Config.Compress) {
         Compress-Collection -SourcePath $collectionPath
-        
+        }
+
         Write-Host "`n=== Collection Complete ===" -ForegroundColor Green
         Write-Host "Total time: $([math]::Round($collectionMetadata.Duration, 2)) minutes"
         Write-Host "Output: $collectionPath"
