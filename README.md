@@ -71,24 +71,41 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 
 For deploying and executing on multiple Windows hosts remotely:
 
+#### Prerequisites (on Ansible control machine)
+- Ansible 2.9+
+
+#### Setup
+
 ```bash
 # Navigate to ansible directory
-cd ansible
+cd Ansible
 
-# Edit inventory.yml to add your Windows hosts
-nano inventory.yml
-
-# Test connectivity
-ansible windows_targets -i inventory.yml -m win_ping
-
-# Deploy and execute
-ansible-playbook -i inventory.yml playbook.yml
-
-# Quick deployment (skip memory)
-ansible-playbook -i inventory.yml quick-deploy.yml
+# Edit inventory file to add your Windows hosts
+nano inventory
 ```
 
-**See [ansible/README.md](ansible/README.md) for detailed Ansible deployment guide.**
+Configure your Windows targets in the `[windows_server]` section
+
+**Note**: For security, use Ansible vault or SSH keys instead of plaintext passwords in production.
+
+#### Execute
+
+```bash
+# Test connectivity to Windows hosts
+ansible windows_server -i inventory -m win_ping
+
+# Deploy and execute AutoTriage on all hosts
+ansible-playbook -i inventory auto-triage.yml
+```
+
+#### Playbook Features
+- Validates connectivity to all target hosts
+- Excludes Tools folder from Windows Defender (prevents false positives)
+- Deploys AutoTriage to remote systems
+- Executes the collection script
+- Automatically fetches generated artifacts back to control machine
+- Cleans up temporary files on remote hosts
+- Collects both ZIP archives and log files
 
 
 ## Output
@@ -123,12 +140,22 @@ A ZIP archive is automatically created after collection completes.
 
 ## Configuration
 
+### Local Execution
+
 Edit `Core/Config.ps1` to customize:
 
 - Output paths
 - Collection toggles (enable/disable specific modules)
 - Event logs to collect
 - Hash algorithm
+
+### Ansible Deployment
+
+The main playbook configuration is in `Ansible/auto-triage.yml`:
+
+- **remote_temp_path**: Working directory on target hosts (default: `C:\temp_triage`)
+- **local_artifact_dir**: Where retrieved artifacts are stored (default: `./fetched_artifacts`)
+- **hosts**: Target host group (default: `windows_server`)
 
 ## External Tools (Optional)
 
@@ -149,23 +176,49 @@ Execution logs are saved to: `IRTriageCollector/Logs/IRCollection_[date].log`
 
 ## Troubleshooting
 
-### "Execution Policy" Error
+### Local Execution
+
+#### "Execution Policy" Error
 
 Run PowerShell as Administrator and execute:
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 ```
 
-### "Access Denied" Errors
+#### "Access Denied" Errors
 
 Ensure you're running PowerShell as Administrator.
 
-### Missing Module Errors
+#### Missing Module Errors
 
 Ensure all files in the following directories exist:
 - `Core/` - Config.ps1, Logger.ps1, MainCollector.ps1
 - `Utils/` - Validation.ps1
 - `Modules/` - All .ps1 files
+
+### Ansible Deployment
+
+#### "unreachable" or authentication failures
+
+- Verify Windows hosts are accessible from control machine
+- Confirm `ansible_user` and `ansible_password` are correct
+- Ensure ports 5985 (HTTP) or 5986 (HTTPS) are open on Windows hosts
+- Check that target hosts have WinRM enabled (run on target as admin):
+  ```powershell
+  Enable-PSRemoting -Force
+  ```
+
+#### "pywinrm" not found error
+
+Install the required Python package on your Ansible control machine:
+```bash
+pip install pywinrm
+```
+
+#### Playbook hangs on win_ping
+
+- Check WinRM listener status on target: `winrm get winrm/config/listener`
+- Try connecting directly: `ansible windows_server -i inventory -m win_ping -vvv`
 
 ## Collection Order (by Volatility)
 
