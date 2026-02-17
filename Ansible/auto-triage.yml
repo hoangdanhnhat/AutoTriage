@@ -1,0 +1,64 @@
+---
+- name: Deploy AutoTriage Script on Windows Servers
+  hosts: windows_server
+  gather_facts: no
+  vars:
+    remote_temp_path: 'C:\temp_triage'
+    local_artifact_dir: './fetched_artifacts'
+
+  tasks:
+    - name: 1. Ensure remote machine is reachable
+      win_ping:
+
+    - name: 2. Exclude Tools folder from Windows Defender
+      win_shell: |
+        Add-MpPreference -ExclusionPath "{{ remote_temp_path }}\Tools" -Force
+      ignore_errors: yes
+
+    - name: 3. Create remote temp directory
+      win_file:
+        path: "{{ remote_temp_path }}"
+        state: directory
+
+    - name: 4. Deliver AutoTriage to target hosts
+      win_copy:
+        src: ../IRTriageCollector/
+        dest: "{{ remote_temp_path }}/"
+
+    - name: 5. Execute the program
+      win_shell: |
+        cd "{{ remote_temp_path }}"
+        powershell.exe -ExecutionPolicy Bypass -File .\Core\MainCollector.ps1
+      register: triage_output
+
+    - name: 6. Locate generated artifact (compressed ZIP file)
+      win_find:
+        paths: "{{ remote_temp_path }}\\Output"
+        patterns: "*.zip"
+      register: found_zip
+
+    - name: 7. Create log file of the Triage script
+      win_copy:
+        content: "{{ triage_output.stdout }}\n{{ triage_output.stderr }}"
+        dest: "{{ remote_temp_path }}\\{{ inventory_hostname }}_triage.log"
+
+    - name: 8. Set artifact path to ZIP file
+      set_fact:
+        artifact_path: "{{ found_zip.files[0].path }}"
+
+    - name: 9. Fetch artifact back to workstation
+      fetch:
+        src: "{{ artifact_path }}"
+        dest: "{{ local_artifact_dir }}/{{ inventory_hostname }}/"
+        flat: no
+
+    - name: 10. Fetch log file back to workstation
+      fetch:
+        src: "{{ remote_temp_path }}\\{{ inventory_hostname }}_triage.log"
+        dest: "{{ local_artifact_dir }}/{{ inventory_hostname }}/"
+        flat: no
+
+    - name: 11. Cleanup remote temp directory
+      win_file:
+        path: "{{ remote_temp_path }}"
+        state: absent
