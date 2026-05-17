@@ -6,13 +6,13 @@ $script:Config = @{
     
     # Collection toggles - Enable/disable specific artifact collection
     CollectMemory           = $false
-    CollectRegistry         = $true
+    CollectRegistry         = $false
     CollectVolatileData     = $true  # Process list and network connections
-    CollectEventLogs        = $true
+    CollectEventLogs        = $false
     CollectPrefetch         = $false
     CollectWindowsArtifacts = $true  # Event logs, prefetch, AppCompat, etc.
     CollectUserArtifacts    = $true  # Browser data, recent files, PowerShell history, etc.
-    CollectProgramData      = $true  # Startup items, WER, Defender, 3rd party apps
+    CollectProgramData      = $false  # Startup items, WER, Defender, 3rd party apps
     CollectNTFS             = $true  # MFT and USN Journal
     Compress                = $true # Whether to compress the collection output into a ZIP file - Should be enabled
                                     # because Ansible can only transfer zip file, not folder.

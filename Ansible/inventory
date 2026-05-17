@@ -1,7 +1,11 @@
-[windows_server]
-192.168.1.20
+[windows_nodes]
+dc
+win-01
 
-[windows_server:vars]
-ansible_user=Administrator
+[windows_nodes:vars]
+ansible_user=autotriage@domain.local
 ansible_connection=ssh
-ansible_shell_type=powershell
+ansible_shell_type=cmd
+
+[linux_nodes]
+ubuntu-server-node

@@ -7,7 +7,7 @@
 #   artifact_base_dir - absolute path on workstation where artifacts land
 #   config_ps1_path   - absolute path to the pre-generated Config.ps1 on the workstation
 #
-- name: Web-triggered IR Triage Collection
+- name: Web-triggered IR Triage Collection (Windows Nodes)
   hosts: triage_targets
   gather_facts: no
   vars:
@@ -76,3 +76,73 @@
       win_file:
         path: "{{ remote_temp_path }}"
         state: absent
+
+- name: Web-triggered IR Triage Collection (Linux Nodes)
+  hosts: triage_targets
+  gather_facts: no
+  vars:
+    remote_temp_path: '/tmp/temp_triage'
+
+  tasks:
+    - name: 1. Ensure remote machine is reachable
+      ping:
+
+    - name: 2. Create remote temp directory
+      file:
+        path: "{{ remote_temp_path }}"
+        state: directory
+        mode: '0755'
+
+    - name: 3. Deliver AutoTriage to target hosts
+      copy:
+        src: /app/linux-triage/
+        dest: "{{ remote_temp_path }}/"
+        mode: preserve
+        exclude:
+          - Output/
+          - Logs/
+
+    - name: 4. Execute the program
+      shell: |
+        cd "{{ remote_temp_path }}"
+        python3 -u main.py
+      register: triage_output
+      become: yes
+      timeout: 1800
+      ignore_errors: yes
+
+    - name: 5. Locate generated artifact (compressed TAR/ZIP file)
+      find:
+        paths: "{{ remote_temp_path }}/output"
+        patterns: "*.zip,*.tar.gz,*.tar"
+      register: found_artifact
+
+    - name: 6. Write execution log to remote
+      copy:
+        content: "{{ triage_output.stdout | default('No output captured') }}\n{{ triage_output.stderr | default('') }}"
+        dest: "{{ remote_temp_path }}/{{ inventory_hostname }}_triage.log"
+
+    - name: 7. Set artifact path fact
+      set_fact:
+        artifact_path: "{{ found_artifact.files[0].path }}"
+      when: found_artifact.files | length > 0
+
+    - name: 8. Fetch artifact back to workstation
+      fetch:
+        src: "{{ artifact_path }}"
+        dest: "{{ artifact_base_dir }}/{{ inventory_hostname }}/"
+        flat: no
+      when: artifact_path is defined
+
+    - name: 9. Fetch execution log back to workstation
+      fetch:
+        src: "{{ remote_temp_path }}/{{ inventory_hostname }}_triage.log"
+        dest: "{{ artifact_base_dir }}/{{ inventory_hostname }}/"
+        flat: no
+
+    - name: 10. Cleanup remote temp directory
+      file:
+        path: "{{ remote_temp_path }}"
+        state: absent
+      become: yes
+      ignore_errors: yes

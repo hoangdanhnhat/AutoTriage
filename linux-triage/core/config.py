@@ -15,7 +15,7 @@ CONFIG = {
     "collect_filesystem_artifacts": True,
     "compress": True,
     "hash_algorithm": "sha256",
-    "required_free_gb": 10,
+    "required_free_gb": 3,
     "max_copy_file_mb": 100,
 }
 

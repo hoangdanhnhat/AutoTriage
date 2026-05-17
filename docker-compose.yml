@@ -4,6 +4,7 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    network_mode: "host"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -19,6 +20,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    network_mode: "host"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -30,6 +32,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    network_mode: "host"
     env_file: .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -63,8 +66,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "3000:80"
+    network_mode: "host"
     depends_on:
       - backend
 
