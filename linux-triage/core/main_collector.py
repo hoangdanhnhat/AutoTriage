@@ -79,7 +79,7 @@ def start_collection() -> int:
             collect_system_artifacts(collection_path, logger, max_file_bytes)
             metadata["Modules"].append("System Artifacts")
 
-        if not args.quick_mode:
+        if CONFIG["collect_log_artifacts"] and not args.quick_mode:
             collect_log_artifacts(collection_path, logger, max_file_bytes)
             metadata["Modules"].append("Log Artifacts")
 
@@ -113,4 +113,3 @@ def start_collection() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(start_collection())
-

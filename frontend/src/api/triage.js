@@ -15,7 +15,8 @@ export const startJob = (id) =>
 export const listArtifacts = (id) =>
   client.get(`/triage/jobs/${id}/artifacts`).then((r) => r.data)
 
-export const artifactDownloadUrl = (id, path) => {
-  const base = import.meta.env.VITE_API_URL || '/api'
-  return `${base}/triage/jobs/${id}/artifacts/download?path=${encodeURIComponent(path)}`
-}
+export const downloadArtifact = (id, path) =>
+  client.get(`/triage/jobs/${id}/artifacts/download`, {
+    params: { path },
+    responseType: 'blob',
+  })

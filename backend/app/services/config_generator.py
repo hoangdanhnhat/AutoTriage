@@ -1,5 +1,5 @@
 """
-Generate Config.ps1 from a Jinja2 template and write it to a temp path for a given job.
+Generate per-job collector configuration files.
 """
 import os
 from pathlib import Path
@@ -36,6 +36,44 @@ def generate_config(job_id: int, modules: dict, output_dir: str) -> str:
     )
     os.makedirs(output_dir, exist_ok=True)
     dest_path = os.path.join(output_dir, f"Config_{job_id}.ps1")
+    with open(dest_path, "w", encoding="utf-8") as fh:
+        fh.write(rendered)
+    return dest_path
+
+
+def _py_bool(value: bool) -> str:
+    return "True" if value else "False"
+
+
+def generate_linux_config(job_id: int, modules: dict, output_dir: str) -> str:
+    """
+    Render linux-triage/core/config.py for a job.
+    Returns the absolute path to the written file.
+    """
+    rendered = f"""from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+
+CONFIG = {{
+    "collection_name": "IR-Triage-Collection",
+    "output_path": BASE_DIR / "output",
+    "log_path": BASE_DIR / "logs",
+    "tools_path": BASE_DIR / "tools",
+    "collect_memory": {_py_bool(modules.get("collect_linux_memory", modules.get("collect_memory", False)))},
+    "collect_volatile_data": {_py_bool(modules.get("collect_linux_volatile_data", modules.get("collect_volatile_data", True)))},
+    "collect_system_artifacts": {_py_bool(modules.get("collect_system_artifacts", True))},
+    "collect_log_artifacts": {_py_bool(modules.get("collect_log_artifacts", True))},
+    "collect_user_artifacts": {_py_bool(modules.get("collect_linux_user_artifacts", modules.get("collect_user_artifacts", True)))},
+    "collect_filesystem_artifacts": {_py_bool(modules.get("collect_filesystem_artifacts", True))},
+    "compress": True,
+    "hash_algorithm": "sha256",
+    "required_free_gb": 3,
+    "max_copy_file_mb": 100,
+}}
+"""
+    os.makedirs(output_dir, exist_ok=True)
+    dest_path = os.path.join(output_dir, f"linux_config_{job_id}.py")
     with open(dest_path, "w", encoding="utf-8") as fh:
         fh.write(rendered)
     return dest_path

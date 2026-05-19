@@ -1,13 +1,11 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import DB, CurrentUser
 from app.models.node import Node, NodeStatus
 from app.schemas.node import NodeWithStatus, CheckStatusResponse
 from app.services.node_checker import check_nodes
+from app.utils.time import utc_now_naive
 
 router = APIRouter(prefix="/inventories", tags=["nodes"])
 
@@ -36,7 +34,7 @@ async def check_inventory_status(inv_id: int, db: DB, current_user: CurrentUser)
     checked = await check_nodes(node_dicts)
 
     # Upsert NodeStatus rows
-    now = datetime.now(timezone.utc)
+    now = utc_now_naive()
     results_out = []
     for item in checked:
         s_result = await db.execute(

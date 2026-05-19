@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
 
     ansible_ssh_key_path: str = "/root/.ssh/ansible"
+    linux_ansible_user: str | None = None
+    linux_become_password: str | None = None
     artifacts_dir: str = "/app/artifacts"
 
     admin_username: str = "admin"

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pwd
 from pathlib import Path
 
-from modules.common import copy_path, existing_paths, run_command
+from modules.common import copy_path, existing_paths, path_exists, run_command
 
 
 def collect_system_artifacts(output_path: Path, logger, max_file_bytes: int) -> None:
@@ -76,13 +76,13 @@ def collect_user_artifacts(output_path: Path, logger, max_file_bytes: int) -> No
     ]
     for user in pwd.getpwall():
         home = Path(user.pw_dir)
-        if not home.is_absolute() or not home.exists() or str(home) in ["/", "/nonexistent"]:
+        if not home.is_absolute() or not path_exists(home, logger) or str(home) in ["/", "/nonexistent"]:
             continue
         user_dest = users_base / user.pw_name
         logger.log(f"Collecting artifacts for user: {user.pw_name}", "INFO")
         for relative in interesting_files:
             source = home / relative
-            if source.exists():
+            if path_exists(source, logger):
                 copied = copy_path(source, user_dest / relative, logger, max_file_bytes)
                 if copied:
                     logger.log(f"Collected {copied} files from {source}", "SUCCESS")
@@ -95,4 +95,3 @@ def collect_filesystem_artifacts(output_path: Path, logger) -> None:
     run_command(["lsblk", "-f"], base / "lsblk_f.txt", logger)
     run_command(["find", "/tmp", "-xdev", "-maxdepth", "2", "-printf", "%p|%u|%g|%m|%s|%TY-%Tm-%Td %TH:%TM:%TS\\n"], base / "tmp_listing.txt", logger, timeout=120)
     run_command(["find", "/var/tmp", "-xdev", "-maxdepth", "2", "-printf", "%p|%u|%g|%m|%s|%TY-%Tm-%Td %TH:%TM:%TS\\n"], base / "var_tmp_listing.txt", logger, timeout=120)
-

@@ -56,11 +56,26 @@ def safe_read_text(path: Path, max_bytes: int = 1024 * 1024) -> str:
         return handle.read(max_bytes).decode("utf-8", errors="replace")
 
 
+def path_exists(path: Path, logger=None) -> bool:
+    try:
+        return path.exists()
+    except OSError as exc:
+        if logger:
+            logger.log(f"Cannot access {path}: {exc}", "WARNING")
+        return False
+
+
 def copy_path(source: Path, destination: Path, logger, max_file_bytes: int) -> int:
-    if not source.exists():
+    if not path_exists(source, logger):
         return 0
     copied = 0
-    if source.is_file():
+    try:
+        is_file = source.is_file()
+    except OSError as exc:
+        logger.log(f"Cannot inspect {source}: {exc}", "WARNING")
+        return 0
+
+    if is_file:
         destination.parent.mkdir(parents=True, exist_ok=True)
         try:
             if source.stat().st_size <= max_file_bytes:
@@ -71,7 +86,10 @@ def copy_path(source: Path, destination: Path, logger, max_file_bytes: int) -> i
             logger.log(f"Failed to copy {source}: {exc}", "WARNING")
         return 0
 
-    for root, dirs, files in os.walk(source, topdown=True, followlinks=False):
+    def on_walk_error(exc: OSError) -> None:
+        logger.log(f"Cannot access {exc.filename}: {exc}", "WARNING")
+
+    for root, dirs, files in os.walk(source, topdown=True, followlinks=False, onerror=on_walk_error):
         root_path = Path(root)
         rel_root = root_path.relative_to(source)
         dirs[:] = [name for name in dirs if not (root_path / name).is_symlink()]
@@ -93,4 +111,4 @@ def copy_path(source: Path, destination: Path, logger, max_file_bytes: int) -> i
 
 
 def existing_paths(paths: Iterable[str]) -> list[Path]:
-    return [Path(item) for item in paths if Path(item).exists()]
+    return [path for item in paths if path_exists(path := Path(item))]

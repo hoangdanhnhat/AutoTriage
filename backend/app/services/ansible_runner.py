@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,7 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 
 from app.config import settings
 from app.models.triage import TriageJob, NodeTriageStatus
-from app.services.config_generator import generate_config
+from app.services.config_generator import generate_config, generate_linux_config
+from app.utils.time import utc_now_naive
 
 logger = logging.getLogger(__name__)
 
@@ -46,26 +48,64 @@ def _ps_bool(value: bool) -> str:
 
 def _write_dynamic_inventory(nodes: list[dict[str, Any]], path: str) -> None:
     """Write a minimal Ansible INI inventory for the given nodes."""
-    lines = ["[triage_targets]"]
+    grouped_nodes = {
+        "windows_nodes": [],
+        "linux_nodes": [],
+    }
     for n in nodes:
-        ip = n["ip_address"]
-        user = n.get("ansible_user", "Administrator")
-        conn = n.get("ansible_connection", "ssh")
-        shell = n.get("ansible_shell_type", "powershell")
-        extra = n.get("extra_vars") or {}
-        extra_str = " ".join(f"{k}={v}" for k, v in extra.items())
-        lines.append(
-            f"{ip} ansible_user={user} ansible_connection={conn} "
-            f"ansible_shell_type={shell} {extra_str}".strip()
-        )
+        group_name = (n.get("group_name") or "").lower()
+        if "linux" in group_name:
+            grouped_nodes["linux_nodes"].append(n)
+        else:
+            grouped_nodes["windows_nodes"].append(n)
+
+    lines = []
+    for group, group_nodes in grouped_nodes.items():
+        lines.append(f"[{group}]")
+        for n in group_nodes:
+            lines.append(_inventory_host_line(n, group))
+        lines.append("")
+
     lines += [
-        "",
-        "[triage_targets:vars]",
-        "ansible_connection=ssh",
-        "ansible_shell_type=powershell",
+        "[triage_targets:children]",
+        "windows_nodes",
+        "linux_nodes",
     ]
     with open(path, "w") as fh:
         fh.write("\n".join(lines) + "\n")
+
+
+def _inventory_host_line(node: dict[str, Any], group: str) -> str:
+    """Render one host line while avoiding Windows-only defaults on Linux hosts."""
+    ip = node["ip_address"]
+    user = node.get("ansible_user")
+    conn = node.get("ansible_connection") or "ssh"
+    shell = node.get("ansible_shell_type")
+    extra = node.get("extra_vars") or {}
+
+    parts = [ip]
+    if user:
+        parts.append(f"ansible_user={_inventory_value(user)}")
+    elif group == "linux_nodes" and settings.linux_ansible_user:
+        parts.append(f"ansible_user={_inventory_value(settings.linux_ansible_user)}")
+    elif group == "windows_nodes":
+        parts.append("ansible_user=Administrator")
+    if conn:
+        parts.append(f"ansible_connection={conn}")
+    if conn == "ssh":
+        parts.append("ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'")
+    if group == "linux_nodes" and settings.linux_become_password:
+        parts.append("ansible_become=true")
+        parts.append("ansible_become_method=sudo")
+        parts.append(f"ansible_become_password={_inventory_value(settings.linux_become_password)}")
+    if shell and (group == "windows_nodes" or shell != "powershell"):
+        parts.append(f"ansible_shell_type={shell}")
+    parts.extend(f"{k}={v}" for k, v in extra.items())
+    return " ".join(parts)
+
+
+def _inventory_value(value: str) -> str:
+    return shlex.quote(str(value))
 
 
 async def _publish(redis_client, channel: str, event: dict) -> None:
@@ -92,7 +132,7 @@ async def run_triage_job(job_id: int) -> None:
             await db.execute(
                 update(TriageJob)
                 .where(TriageJob.id == job_id)
-                .values(status="failed", completed_at=datetime.now(timezone.utc))
+                .values(status="failed", completed_at=utc_now_naive())
             )
             await db.commit()
             channel = f"triage:{job_id}"
@@ -121,9 +161,10 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
             "id": n.id,
             "ip_address": n.ip_address,
             "hostname": n.hostname or n.ip_address,
-            "ansible_user": n.ansible_user or "Administrator",
+            "ansible_user": n.ansible_user,
             "ansible_connection": n.ansible_connection or "ssh",
-            "ansible_shell_type": n.ansible_shell_type or "powershell",
+            "ansible_shell_type": n.ansible_shell_type,
+            "group_name": n.group_name,
             "extra_vars": n.extra_vars or {},
         }
         for n in db_nodes
@@ -136,6 +177,7 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
     # ── Generate Config.ps1 ────────────────────────────────────────────────────
     modules: dict = job.selected_modules
     config_path = generate_config(job_id, modules, artifact_dir)
+    linux_config_path = generate_linux_config(job_id, modules, artifact_dir)
 
     # ── Write dynamic inventory ────────────────────────────────────────────────
     inv_file = os.path.join(artifact_dir, "inventory.ini")
@@ -145,7 +187,7 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
     await db.execute(
         update(TriageJob)
         .where(TriageJob.id == job_id)
-        .values(status="running", started_at=datetime.now(timezone.utc), artifact_dir=artifact_dir)
+        .values(status="running", started_at=utc_now_naive(), artifact_dir=artifact_dir)
     )
     # Create NodeTriageStatus rows for each node
     for n in nodes:
@@ -176,6 +218,7 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
             "job_id": str(job_id),
             "artifact_base_dir": artifact_dir,
             "config_ps1_path": config_path,
+            "linux_config_path": linux_config_path,
         }),
     ]
 
@@ -220,7 +263,7 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
                     if not node_started[ip]:
                         node_started[ip] = True
                         await _update_node_status(db, job_id, ip, "running",
-                                                   started_at=datetime.now(timezone.utc))
+                                                   started_at=utc_now_naive())
                     ip_log_buffer[ip].append(f"[{current_task_name}] ok")
                     await _publish(redis_client, channel, {
                         "type": "node_status",
@@ -258,7 +301,7 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
                     db, job_id, ip, "failed",
                     log="\n".join(ip_log_buffer[ip]),
                     error_message=line,
-                    completed_at=datetime.now(timezone.utc),
+                    completed_at=utc_now_naive(),
                 )
 
     await proc.wait()
@@ -282,7 +325,7 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
                 db, job_id, ip, new_s,
                 log="\n".join(ip_log_buffer.get(ip, [])),
                 artifact_path=artifact_zip,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=utc_now_naive(),
             )
             await _publish(redis_client, channel, {
                 "type": "node_status",
@@ -295,7 +338,7 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
     await db.execute(
         update(TriageJob)
         .where(TriageJob.id == job_id)
-        .values(status=final_job_status, completed_at=datetime.now(timezone.utc))
+        .values(status=final_job_status, completed_at=utc_now_naive())
     )
     await db.commit()
 
@@ -316,11 +359,17 @@ def _resolve_ip(host_token: str, nodes: list[dict]) -> str | None:
 
 
 def _find_artifact_zip(artifact_dir: str, ip: str) -> str | None:
-    """Look for the fetched ZIP under artifact_dir/<ip>/."""
+    """Look for a fetched Linux or Windows artifact under artifact_dir."""
     base = Path(artifact_dir)
-    candidates = list(base.rglob("*.zip"))
+    host_base = base / ip
+    search_base = host_base if host_base.exists() else base
+    candidates = [
+        candidate
+        for pattern in ("*.zip", "*.tar.gz", "*.tar")
+        for candidate in search_base.rglob(pattern)
+    ]
     if candidates:
-        return str(candidates[0])
+        return str(sorted(candidates)[0])
     return None
 
 

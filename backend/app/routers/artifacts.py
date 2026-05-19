@@ -37,7 +37,7 @@ async def download_artifact(job_id: int, path: str, db: DB, current_user: Curren
     # Security: ensure path stays within artifact_dir
     base = Path(job.artifact_dir).resolve()
     target = (base / path).resolve()
-    if not str(target).startswith(str(base)):
+    if not target.is_relative_to(base):
         raise HTTPException(status_code=400, detail="Invalid path")
     if not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")

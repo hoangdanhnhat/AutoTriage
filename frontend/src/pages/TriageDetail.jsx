@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getJob, listArtifacts, artifactDownloadUrl } from '../api/triage'
+import { getJob, listArtifacts, downloadArtifact } from '../api/triage'
 import { useTriageWebSocket } from '../hooks/useTriageWebSocket'
 import TriageProgressTable from '../components/TriageProgressTable'
 import { ArrowLeft, Download, Terminal } from 'lucide-react'
@@ -57,6 +57,18 @@ export default function TriageDetail() {
   useTriageWebSocket(jobId, onMessage)
 
   const currentStatus = jobStatus ?? job?.status ?? 'pending'
+
+  const handleDownload = async (artifactPath) => {
+    const response = await downloadArtifact(jobId, artifactPath)
+    const blobUrl = window.URL.createObjectURL(response.data)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = artifactPath.split('/').pop() || 'artifact'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(blobUrl)
+  }
 
   if (isLoading) return <p className="text-sm text-gray-500">Loading…</p>
   if (!job) return <p className="text-sm text-red-500">Job not found.</p>
@@ -127,14 +139,14 @@ export default function TriageDetail() {
                   <p className="text-sm font-mono text-gray-700">{f.path}</p>
                   <p className="text-xs text-gray-400">{(f.size / 1024).toFixed(1)} KB</p>
                 </div>
-                <a
-                  href={artifactDownloadUrl(jobId, f.path)}
+                <button
+                  type="button"
+                  onClick={() => handleDownload(f.path)}
                   className="flex items-center gap-1 text-xs text-cyan-600 hover:underline"
-                  download
                 >
                   <Download size={14} />
                   Download
-                </a>
+                </button>
               </div>
             ))}
           </div>

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 
 class ModuleSelection(BaseModel):
+    # Shared / Windows collection flags
     collect_memory: bool = False
     collect_volatile_data: bool = True
     collect_registry: bool = True
@@ -13,6 +14,14 @@ class ModuleSelection(BaseModel):
     collect_user_artifacts: bool = True
     collect_program_data: bool = True
     collect_ntfs: bool = False
+
+    # Linux collection flags
+    collect_linux_memory: bool = False
+    collect_linux_volatile_data: bool = True
+    collect_system_artifacts: bool = True
+    collect_log_artifacts: bool = True
+    collect_linux_user_artifacts: bool = True
+    collect_filesystem_artifacts: bool = True
 
 
 class TriageJobCreate(BaseModel):

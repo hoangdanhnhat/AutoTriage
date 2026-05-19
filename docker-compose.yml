@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16-alpine
@@ -31,15 +29,18 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      network: host
     restart: unless-stopped
     network_mode: "host"
     env_file: .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}
+      REDIS_URL: redis://127.0.0.1:6379/0
       SECRET_KEY: ${SECRET_KEY}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
       ANSIBLE_SSH_KEY_PATH: ${ANSIBLE_SSH_KEY_PATH:-/root/.ssh/ansible}
+      LINUX_ANSIBLE_USER: ${LINUX_ANSIBLE_USER:-ratatoui1e}
+      LINUX_BECOME_PASSWORD: ${LINUX_BECOME_PASSWORD:-}
       ARTIFACTS_DIR: ${ARTIFACTS_DIR:-/app/artifacts}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
@@ -47,14 +48,13 @@ services:
     volumes:
       # Mount SSH private key (read-only)
       - ${HOST_ANSIBLE_KEY_PATH}:/root/.ssh/ansible:ro
-      # Mount the IRTriageCollector scripts so Ansible can copy them to targets
-      - ./IRTriageCollector:/app/IRTriageCollector:ro
+      # Mount collector scripts so Ansible can copy them to targets
+      - ./windows-triage:/app/windows-triage:ro
+      - ./linux-triage:/app/linux-triage:ro
       # Mount Ansible playbooks
       - ./Ansible:/app/Ansible:ro
       # Persistent artifact storage
       - artifacts_data:/app/artifacts
-    ports:
-      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -65,6 +65,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      network: host
     restart: unless-stopped
     network_mode: "host"
     depends_on:

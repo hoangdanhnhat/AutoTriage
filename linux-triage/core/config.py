@@ -11,6 +11,7 @@ CONFIG = {
     "collect_memory": False,
     "collect_volatile_data": True,
     "collect_system_artifacts": True,
+    "collect_log_artifacts": True,
     "collect_user_artifacts": True,
     "collect_filesystem_artifacts": True,
     "compress": True,
@@ -18,4 +19,3 @@ CONFIG = {
     "required_free_gb": 3,
     "max_copy_file_mb": 100,
 }
-

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { listInventories, getInventoryNodes } from '../api/inventories'
 import { createJob, startJob } from '../api/triage'
-import ModuleSelector, { DEFAULT_MODULES } from '../components/ModuleSelector'
+import ModuleSelector, { DEFAULT_MODULES, MODULE_LABELS } from '../components/ModuleSelector'
 import NodeStatusCard from '../components/NodeStatusCard'
 import InventoryUploader from '../components/InventoryUploader'
 import clsx from 'clsx'
@@ -198,7 +198,10 @@ export default function TriageNew() {
               <p><span className="font-medium">Inventory ID:</span> {selectedInvId}</p>
               <p><span className="font-medium">Nodes ({selectedNodes.length}):</span> {selectedNodes.map(n => n.ip_address).join(', ')}</p>
               <p><span className="font-medium">Modules enabled:</span>{' '}
-                {Object.entries(modules).filter(([, v]) => v).map(([k]) => k.replace('collect_', '')).join(', ')}
+                {Object.entries(modules)
+                  .filter(([, v]) => v)
+                  .map(([k]) => MODULE_LABELS[k] ?? k.replace('collect_', ''))
+                  .join(', ')}
               </p>
             </div>
             {isError && (

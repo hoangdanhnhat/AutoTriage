@@ -5,15 +5,15 @@ $script:Config = @{
     ToolsPath               = "$PSScriptRoot\..\Tools"
 
     # Collection toggles - managed by web app
-    CollectMemory           = ${{ '$true' if collect_memory else '$false' }}
-    CollectRegistry         = ${{ '$true' if collect_registry else '$false' }}
-    CollectVolatileData     = ${{ '$true' if collect_volatile_data else '$false' }}
-    CollectEventLogs        = ${{ '$true' if collect_event_logs else '$false' }}
-    CollectPrefetch         = ${{ '$true' if collect_prefetch else '$false' }}
-    CollectWindowsArtifacts = ${{ '$true' if collect_windows_artifacts else '$false' }}
-    CollectUserArtifacts    = ${{ '$true' if collect_user_artifacts else '$false' }}
-    CollectProgramData      = ${{ '$true' if collect_program_data else '$false' }}
-    CollectNTFS             = ${{ '$true' if collect_ntfs else '$false' }}
+    CollectMemory           = {{ '$true' if collect_memory else '$false' }}
+    CollectRegistry         = {{ '$true' if collect_registry else '$false' }}
+    CollectVolatileData     = {{ '$true' if collect_volatile_data else '$false' }}
+    CollectEventLogs        = {{ '$true' if collect_event_logs else '$false' }}
+    CollectPrefetch         = {{ '$true' if collect_prefetch else '$false' }}
+    CollectWindowsArtifacts = {{ '$true' if collect_windows_artifacts else '$false' }}
+    CollectUserArtifacts    = {{ '$true' if collect_user_artifacts else '$false' }}
+    CollectProgramData      = {{ '$true' if collect_program_data else '$false' }}
+    CollectNTFS             = {{ '$true' if collect_ntfs else '$false' }}
     Compress                = $true
 
     HashAlgorithm           = "SHA256"
