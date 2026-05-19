@@ -1,0 +1,76 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    network_mode: "host"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    network_mode: "host"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      network: host
+    restart: unless-stopped
+    network_mode: "host"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}
+      REDIS_URL: redis://127.0.0.1:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
+      ANSIBLE_SSH_KEY_PATH: ${ANSIBLE_SSH_KEY_PATH:-/root/.ssh/ansible}
+      LINUX_ANSIBLE_USER: ${LINUX_ANSIBLE_USER:-ratatoui1e}
+      LINUX_BECOME_PASSWORD: ${LINUX_BECOME_PASSWORD:-}
+      ARTIFACTS_DIR: ${ARTIFACTS_DIR:-/app/artifacts}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@localhost}
+    volumes:
+      # Mount SSH private key (read-only)
+      - ${HOST_ANSIBLE_KEY_PATH}:/root/.ssh/ansible:ro
+      # Mount collector scripts so Ansible can copy them to targets
+      - ./windows-triage:/app/windows-triage:ro
+      - ./linux-triage:/app/linux-triage:ro
+      # Mount Ansible playbooks
+      - ./Ansible:/app/Ansible:ro
+      # Persistent artifact storage
+      - artifacts_data:/app/artifacts
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      network: host
+    restart: unless-stopped
+    network_mode: "host"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  artifacts_data:

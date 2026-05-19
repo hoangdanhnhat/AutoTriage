@@ -1,0 +1,164 @@
+---
+# auto-triage-web.yml
+# Web-app-driven variant of auto-triage.yml.
+#
+# Extra vars (passed by ansible_runner.py):
+#   job_id            - triage job identifier (used in artifact paths)
+#   artifact_base_dir - absolute path on workstation where artifacts land
+#   config_ps1_path   - absolute path to the pre-generated Config.ps1 on the workstation
+#   linux_config_path - absolute path to the pre-generated Linux config.py on the workstation
+#
+- name: Web-triggered IR Triage Collection (Windows Nodes)
+  hosts: windows_nodes
+  gather_facts: no
+  vars:
+    remote_temp_path: 'C:\temp_triage'
+
+  tasks:
+    - name: 1. Ensure remote machine is reachable
+      win_ping:
+
+    - name: 2. Exclude Tools folder from Windows Defender
+      win_shell: |
+        Add-MpPreference -ExclusionPath "{{ remote_temp_path }}\Tools" -Force
+      ignore_errors: yes
+
+    - name: 3. Create remote temp directory
+      win_file:
+        path: "{{ remote_temp_path }}"
+        state: directory
+
+    - name: 4. Deliver AutoTriage scripts to target
+      win_copy:
+        src: /app/windows-triage/
+        dest: "{{ remote_temp_path }}/"
+
+    - name: 5. Upload job-specific Config.ps1 (overrides defaults)
+      win_copy:
+        src: "{{ config_ps1_path }}"
+        dest: "{{ remote_temp_path }}\\Core\\Config.ps1"
+
+    - name: 6. Execute the triage collector
+      win_shell: |
+        cd "{{ remote_temp_path }}"
+        powershell.exe -ExecutionPolicy Bypass -File .\Core\MainCollector.ps1
+      register: triage_output
+
+    - name: 7. Locate generated artifact ZIP
+      win_find:
+        paths: "{{ remote_temp_path }}\\Output"
+        patterns: "*.zip"
+      register: found_zip
+
+    - name: 8. Write execution log to remote
+      win_copy:
+        content: "{{ triage_output.stdout }}\n{{ triage_output.stderr }}"
+        dest: "{{ remote_temp_path }}\\{{ inventory_hostname }}_triage.log"
+
+    - name: 9. Set artifact path fact
+      set_fact:
+        artifact_path: "{{ found_zip.files[0].path }}"
+      when: found_zip.files | length > 0
+
+    - name: 10. Fetch artifact ZIP back to workstation
+      fetch:
+        src: "{{ artifact_path }}"
+        dest: "{{ artifact_base_dir }}/{{ inventory_hostname }}/"
+        flat: no
+      when: artifact_path is defined
+
+    - name: 11. Fetch execution log back to workstation
+      fetch:
+        src: "{{ remote_temp_path }}\\{{ inventory_hostname }}_triage.log"
+        dest: "{{ artifact_base_dir }}/{{ inventory_hostname }}/"
+        flat: no
+
+    - name: 12. Cleanup remote temp directory
+      win_file:
+        path: "{{ remote_temp_path }}"
+        state: absent
+
+- name: Web-triggered IR Triage Collection (Linux Nodes)
+  hosts: linux_nodes
+  gather_facts: no
+  vars:
+    remote_temp_path: '/tmp/temp_triage'
+
+  tasks:
+    - name: 1. Ensure remote machine is reachable
+      ping:
+
+    - name: 2. Create remote temp directory
+      file:
+        path: "{{ remote_temp_path }}"
+        state: directory
+        mode: '0755'
+
+    - name: 3. Deliver AutoTriage to target hosts
+      copy:
+        src: /app/linux-triage/
+        dest: "{{ remote_temp_path }}/"
+        mode: preserve
+
+    - name: 4. Upload job-specific Linux config.py
+      copy:
+        src: "{{ linux_config_path }}"
+        dest: "{{ remote_temp_path }}/core/config.py"
+
+    - name: 5. Execute the program
+      shell: |
+        cd "{{ remote_temp_path }}"
+        python3 -u main.py
+      register: triage_output
+      become: "{{ ansible_become | default(false) | bool }}"
+      timeout: 1800
+      failed_when: false
+
+    - name: 6. Locate generated artifact (compressed TAR/ZIP file)
+      find:
+        paths: "{{ remote_temp_path }}/output"
+        patterns: "*.zip,*.tar.gz,*.tar"
+      register: found_artifact
+
+    - name: 7. Write execution log to remote
+      copy:
+        content: |
+          Collector return code: {{ triage_output.rc | default('unknown') }}
+
+          [stdout]
+          {{ triage_output.stdout | default('No output captured') }}
+
+          [stderr]
+          {{ triage_output.stderr | default('') }}
+        dest: "{{ remote_temp_path }}/{{ inventory_hostname }}_triage.log"
+
+    - name: 8. Set artifact path fact
+      set_fact:
+        artifact_path: "{{ found_artifact.files[0].path }}"
+      when: found_artifact.files | length > 0
+
+    - name: 9. Fetch artifact back to workstation
+      fetch:
+        src: "{{ artifact_path }}"
+        dest: "{{ artifact_base_dir }}/{{ inventory_hostname }}/"
+        flat: no
+      when: artifact_path is defined
+
+    - name: 10. Fetch execution log back to workstation
+      fetch:
+        src: "{{ remote_temp_path }}/{{ inventory_hostname }}_triage.log"
+        dest: "{{ artifact_base_dir }}/{{ inventory_hostname }}/"
+        flat: no
+
+    - name: 11. Cleanup remote temp directory
+      shell: rm -rf "{{ remote_temp_path }}"
+      become: "{{ ansible_become | default(false) | bool }}"
+      changed_when: true
+      failed_when: false
+
+    - name: 12. Fail if collector failed before producing an artifact
+      fail:
+        msg: "Linux collector exited with rc={{ triage_output.rc }} and no artifact was produced. See fetched execution log."
+      when:
+        - triage_output.rc | default(1) | int != 0
+        - found_artifact.files | length == 0
