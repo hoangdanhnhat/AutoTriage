@@ -14,6 +14,8 @@ Supported INI conventions:
 import re
 from typing import Any
 
+from app.services.host_resolution import is_ip_address, normalize_host_identity, resolve_hostname_to_ip
+
 
 def _parse_vars_line(line: str) -> dict[str, str]:
     """Parse 'key=value key2=value2 ...' into a dict."""
@@ -91,13 +93,18 @@ def parse_inventory(content: str) -> dict[str, Any]:
             host_alias = parts[0]
             inline_vars = _parse_vars_line(" ".join(parts[1:]))
 
-            ip_address = inline_vars.pop("ansible_host", host_alias)
-            # If host_alias looks like an IP, use it as ip_address
-            if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", host_alias):
-                ip_address = host_alias
-                host_alias_name = None
+            ansible_host = inline_vars.pop("ansible_host", None)
+            if ansible_host:
+                if is_ip_address(ansible_host):
+                    hostname_hint = None if is_ip_address(host_alias) else host_alias
+                    ip_address, host_alias_name = normalize_host_identity(ansible_host, hostname_hint)
+                else:
+                    ip_address = resolve_hostname_to_ip(ansible_host) or ansible_host
+                    host_alias_name = host_alias if not is_ip_address(host_alias) else ansible_host
+            elif is_ip_address(host_alias):
+                ip_address, host_alias_name = normalize_host_identity(host_alias)
             else:
-                host_alias_name = host_alias
+                ip_address, host_alias_name = normalize_host_identity(host_alias, host_alias)
 
             node: dict[str, Any] = {
                 "ip_address": ip_address,

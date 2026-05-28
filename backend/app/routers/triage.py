@@ -9,6 +9,7 @@ from app.models.node import Node
 from app.models.triage import TriageJob, NodeTriageStatus
 from app.schemas.triage import TriageJobCreate, TriageJobOut, TriageJobDetail, NodeTriageStatusOut
 from app.services.ansible_runner import run_triage_job
+from app.services.host_resolution import normalize_host_identity
 
 router = APIRouter(prefix="/triage", tags=["triage"])
 
@@ -73,6 +74,25 @@ async def get_job(job_id: int, db: DB, current_user: CurrentUser):
     )
     node_statuses = ns_result.scalars().all()
 
+    node_statuses_out = []
+    for ns in node_statuses:
+        ip_address, hostname = normalize_host_identity(ns.ip_address, ns.hostname)
+        node_statuses_out.append(
+            NodeTriageStatusOut(
+                id=ns.id,
+                job_id=ns.job_id,
+                node_id=ns.node_id,
+                ip_address=ip_address,
+                hostname=hostname,
+                status=ns.status,
+                output_log=ns.output_log,
+                artifact_path=ns.artifact_path,
+                started_at=ns.started_at,
+                completed_at=ns.completed_at,
+                error_message=ns.error_message,
+            )
+        )
+
     detail = TriageJobDetail(
         id=job.id,
         name=job.name,
@@ -85,6 +105,6 @@ async def get_job(job_id: int, db: DB, current_user: CurrentUser):
         started_at=job.started_at,
         completed_at=job.completed_at,
         artifact_dir=job.artifact_dir,
-        node_statuses=[NodeTriageStatusOut.model_validate(ns) for ns in node_statuses],
+        node_statuses=node_statuses_out,
     )
     return detail
