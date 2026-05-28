@@ -4,3 +4,4 @@ plan.txt
 linux-triage/Output
 linux-triage/Logs
 .env
+*__pycache__

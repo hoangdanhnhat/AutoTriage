@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from app.config import settings
 from app.models.triage import TriageJob, NodeTriageStatus
 from app.services.config_generator import generate_config, generate_linux_config
+from app.services.host_resolution import normalize_host_identity
 from app.utils.time import utc_now_naive
 
 logger = logging.getLogger(__name__)
@@ -48,16 +49,7 @@ def _ps_bool(value: bool) -> str:
 
 def _write_dynamic_inventory(nodes: list[dict[str, Any]], path: str) -> None:
     """Write a minimal Ansible INI inventory for the given nodes."""
-    grouped_nodes = {
-        "windows_nodes": [],
-        "linux_nodes": [],
-    }
-    for n in nodes:
-        group_name = (n.get("group_name") or "").lower()
-        if "linux" in group_name:
-            grouped_nodes["linux_nodes"].append(n)
-        else:
-            grouped_nodes["windows_nodes"].append(n)
+    grouped_nodes = _group_nodes_by_os(nodes)
 
     lines = []
     for group, group_nodes in grouped_nodes.items():
@@ -73,6 +65,20 @@ def _write_dynamic_inventory(nodes: list[dict[str, Any]], path: str) -> None:
     ]
     with open(path, "w") as fh:
         fh.write("\n".join(lines) + "\n")
+
+
+def _group_nodes_by_os(nodes: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped_nodes: dict[str, list[dict[str, Any]]] = {
+        "windows_nodes": [],
+        "linux_nodes": [],
+    }
+    for n in nodes:
+        group_name = (n.get("group_name") or "").lower()
+        if "linux" in group_name:
+            grouped_nodes["linux_nodes"].append(n)
+        else:
+            grouped_nodes["windows_nodes"].append(n)
+    return grouped_nodes
 
 
 def _inventory_host_line(node: dict[str, Any], group: str) -> str:
@@ -156,19 +162,21 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
     node_ids: list[int] = job.selected_nodes
     nodes_result = await db.execute(select(Node).where(Node.id.in_(node_ids)))
     db_nodes = nodes_result.scalars().all()
-    nodes = [
-        {
-            "id": n.id,
-            "ip_address": n.ip_address,
-            "hostname": n.hostname or n.ip_address,
-            "ansible_user": n.ansible_user,
-            "ansible_connection": n.ansible_connection or "ssh",
-            "ansible_shell_type": n.ansible_shell_type,
-            "group_name": n.group_name,
-            "extra_vars": n.extra_vars or {},
-        }
-        for n in db_nodes
-    ]
+    nodes = []
+    for n in db_nodes:
+        ip_address, hostname = normalize_host_identity(n.ip_address, n.hostname)
+        nodes.append(
+            {
+                "id": n.id,
+                "ip_address": ip_address,
+                "hostname": hostname or ip_address,
+                "ansible_user": n.ansible_user,
+                "ansible_connection": n.ansible_connection or "ssh",
+                "ansible_shell_type": n.ansible_shell_type,
+                "group_name": n.group_name,
+                "extra_vars": n.extra_vars or {},
+            }
+        )
 
     # ── Prepare output directory ───────────────────────────────────────────────
     artifact_dir = os.path.join(settings.artifacts_dir, str(job_id))
@@ -207,111 +215,62 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 
-    # ── Build ansible-playbook command ─────────────────────────────────────────
-    cmd = [
-        "ansible-playbook",
-        PLAYBOOK_PATH,
-        "-i", inv_file,
-        "--private-key", settings.ansible_ssh_key_path,
-        "--extra-vars",
-        json.dumps({
-            "job_id": str(job_id),
-            "artifact_base_dir": artifact_dir,
-            "config_ps1_path": config_path,
-            "linux_config_path": linux_config_path,
-        }),
-    ]
-
-    logger.info("Launching: %s", " ".join(cmd))
-
-    # ── Launch subprocess ──────────────────────────────────────────────────────
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-        env={**os.environ, "ANSIBLE_FORCE_COLOR": "false", "ANSIBLE_NOCOLOR": "1"},
-    )
-
-    current_task_name = "initializing"
-    ip_log_buffer: dict[str, list[str]] = {n["ip_address"]: [] for n in nodes}
-    node_started: dict[str, bool] = {n["ip_address"]: False for n in nodes}
-
-    # ── Stream output ──────────────────────────────────────────────────────────
-    assert proc.stdout is not None
-    in_recap = False
-
-    async for raw in proc.stdout:
-        line = raw.decode(errors="replace").rstrip()
-        logger.debug("[ansible] %s", line)
-
-        if _PLAY_RECAP_RE.match(line):
-            in_recap = True
+    extra_vars = json.dumps({
+        "job_id": str(job_id),
+        "artifact_base_dir": artifact_dir,
+        "config_ps1_path": config_path,
+        "linux_config_path": linux_config_path,
+    })
+    grouped_nodes = _group_nodes_by_os(nodes)
+    db_lock = asyncio.Lock()
+    run_tasks = []
+    for group, group_nodes in grouped_nodes.items():
+        if not group_nodes:
             continue
+        cmd = [
+            "ansible-playbook",
+            PLAYBOOK_PATH,
+            "-i", inv_file,
+            "--limit", group,
+            "--private-key", settings.ansible_ssh_key_path,
+            "--extra-vars", extra_vars,
+        ]
+        run_tasks.append(
+            _run_ansible_group(
+                job_id=job_id,
+                group=group,
+                cmd=cmd,
+                nodes=group_nodes,
+                db=db,
+                db_lock=db_lock,
+                redis_client=redis_client,
+                channel=channel,
+            )
+        )
 
-        # Detect task name
-        m = _TASK_RE.match(line)
-        if m:
-            current_task_name = m.group(1).strip()
-            continue
+    if not run_tasks:
+        raise ValueError(f"Job {job_id} has no selected nodes")
 
-        # ok / changed per host
-        for pattern, new_status in [(_OK_RE, None), (_CHANGED_RE, None)]:
-            m = pattern.match(line)
-            if m:
-                ip = _resolve_ip(m.group(1), nodes)
-                if ip:
-                    if not node_started[ip]:
-                        node_started[ip] = True
-                        await _update_node_status(db, job_id, ip, "running",
-                                                   started_at=utc_now_naive())
-                    ip_log_buffer[ip].append(f"[{current_task_name}] ok")
-                    await _publish(redis_client, channel, {
-                        "type": "node_status",
-                        "node_ip": ip,
-                        "status": "running",
-                        "task": current_task_name,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    })
-                    await _publish(redis_client, channel, {
-                        "type": "log",
-                        "node_ip": ip,
-                        "line": f"[{current_task_name}] ok",
-                    })
-                break
-
-        # fatal
-        m = _FATAL_RE.match(line)
-        if m:
-            ip = _resolve_ip(m.group(1), nodes)
-            if ip:
-                ip_log_buffer[ip].append(f"[{current_task_name}] FAILED: {line}")
-                await _publish(redis_client, channel, {
-                    "type": "node_status",
-                    "node_ip": ip,
-                    "status": "failed",
-                    "task": current_task_name,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                })
-                await _publish(redis_client, channel, {
-                    "type": "log",
-                    "node_ip": ip,
-                    "line": f"[{current_task_name}] FAILED",
-                })
-                await _update_node_status(
-                    db, job_id, ip, "failed",
-                    log="\n".join(ip_log_buffer[ip]),
-                    error_message=line,
-                    completed_at=utc_now_naive(),
-                )
-
-    await proc.wait()
+    group_results = await asyncio.gather(*run_tasks)
+    group_returncodes = {group: returncode for group, returncode, _ in group_results}
+    ip_log_buffer = {
+        ip: lines
+        for _, _, buffers in group_results
+        for ip, lines in buffers.items()
+    }
 
     # ── Parse RECAP and finalize ────────────────────────────────────────────────
     # Any node still in "running" or "pending" → completed (ansible exit 0 = success)
-    final_job_status = "completed" if proc.returncode == 0 else "partial"
+    final_job_status = (
+        "completed"
+        if all(returncode == 0 for returncode in group_returncodes.values())
+        else "partial"
+    )
 
     for n in nodes:
         ip = n["ip_address"]
+        group = "linux_nodes" if n in grouped_nodes["linux_nodes"] else "windows_nodes"
+        group_returncode = group_returncodes.get(group, 1)
         # Check current DB status
         res = await db.execute(
             select(NodeTriageStatus)
@@ -319,7 +278,7 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
         )
         nts = res.scalar_one_or_none()
         if nts and nts.status in ("pending", "running"):
-            new_s = "completed" if proc.returncode == 0 else "failed"
+            new_s = "completed" if group_returncode == 0 else "failed"
             artifact_zip = _find_artifact_zip(artifact_dir, ip)
             await _update_node_status(
                 db, job_id, ip, new_s,
@@ -347,6 +306,99 @@ async def _execute_job(job_id: int, db: AsyncSession, redis_client) -> None:
         "status": final_job_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
+
+
+async def _run_ansible_group(
+    *,
+    job_id: int,
+    group: str,
+    cmd: list[str],
+    nodes: list[dict[str, Any]],
+    db: AsyncSession,
+    db_lock: asyncio.Lock,
+    redis_client,
+    channel: str,
+) -> tuple[str, int, dict[str, list[str]]]:
+    logger.info("Launching %s triage: %s", group, " ".join(cmd))
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        env={**os.environ, "ANSIBLE_FORCE_COLOR": "false", "ANSIBLE_NOCOLOR": "1"},
+    )
+
+    current_task_name = "initializing"
+    ip_log_buffer: dict[str, list[str]] = {n["ip_address"]: [] for n in nodes}
+    node_started: dict[str, bool] = {n["ip_address"]: False for n in nodes}
+
+    assert proc.stdout is not None
+    async for raw in proc.stdout:
+        line = raw.decode(errors="replace").rstrip()
+        logger.debug("[ansible:%s] %s", group, line)
+
+        if _PLAY_RECAP_RE.match(line):
+            continue
+
+        m = _TASK_RE.match(line)
+        if m:
+            current_task_name = m.group(1).strip()
+            continue
+
+        for pattern in (_OK_RE, _CHANGED_RE):
+            m = pattern.match(line)
+            if m:
+                ip = _resolve_ip(m.group(1), nodes)
+                if ip:
+                    if not node_started[ip]:
+                        node_started[ip] = True
+                        async with db_lock:
+                            await _update_node_status(
+                                db, job_id, ip, "running",
+                                started_at=utc_now_naive(),
+                            )
+                    ip_log_buffer[ip].append(f"[{current_task_name}] ok")
+                    await _publish(redis_client, channel, {
+                        "type": "node_status",
+                        "node_ip": ip,
+                        "status": "running",
+                        "task": current_task_name,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    })
+                    await _publish(redis_client, channel, {
+                        "type": "log",
+                        "node_ip": ip,
+                        "line": f"[{current_task_name}] ok",
+                    })
+                break
+
+        m = _FATAL_RE.match(line)
+        if m:
+            ip = _resolve_ip(m.group(1), nodes)
+            if ip:
+                ip_log_buffer[ip].append(f"[{current_task_name}] FAILED: {line}")
+                await _publish(redis_client, channel, {
+                    "type": "node_status",
+                    "node_ip": ip,
+                    "status": "failed",
+                    "task": current_task_name,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                await _publish(redis_client, channel, {
+                    "type": "log",
+                    "node_ip": ip,
+                    "line": f"[{current_task_name}] FAILED",
+                })
+                async with db_lock:
+                    await _update_node_status(
+                        db, job_id, ip, "failed",
+                        log="\n".join(ip_log_buffer[ip]),
+                        error_message=line,
+                        completed_at=utc_now_naive(),
+                    )
+
+    await proc.wait()
+    return group, proc.returncode or 0, ip_log_buffer
 
 
 def _resolve_ip(host_token: str, nodes: list[dict]) -> str | None:

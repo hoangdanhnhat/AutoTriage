@@ -142,4 +142,4 @@ export default function ModuleSelector({ value, onChange }) {
   )
 }
 
-export const DEFAULT_MODULES = Object.fromEntries(MODULES.map((m) => [m.key, m.default]))
+export const DEFAULT_MODULES = Object.fromEntries(MODULES.map((m) => [m.key, false]))
