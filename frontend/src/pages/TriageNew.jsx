@@ -6,6 +6,7 @@ import { createJob, startJob } from '../api/triage'
 import ModuleSelector, { DEFAULT_MODULES, MODULE_LABELS } from '../components/ModuleSelector'
 import NodeStatusCard from '../components/NodeStatusCard'
 import InventoryUploader from '../components/InventoryUploader'
+import { Check, ChevronLeft, ChevronRight, Database, Play } from 'lucide-react'
 import clsx from 'clsx'
 
 const STEPS = ['Inventory', 'Nodes', 'Modules', 'Review']
@@ -16,7 +17,7 @@ export default function TriageNew() {
   const locationState = location.state ?? {}
 
   const [step, setStep] = useState(0)
-  const [invMode, setInvMode] = useState('existing') // existing | upload
+  const [invMode, setInvMode] = useState('existing')
   const [selectedInvId, setSelectedInvId] = useState(locationState.inventoryId ?? null)
   const [selectedNodes, setSelectedNodes] = useState(locationState.selectedNodes ?? [])
   const [modules, setModules] = useState(DEFAULT_MODULES)
@@ -62,72 +63,69 @@ export default function TriageNew() {
     return true
   }
 
-  return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">New Triage Job</h1>
+  const enabledModules = Object.entries(modules)
+    .filter(([, v]) => v)
+    .map(([k]) => MODULE_LABELS[k] ?? k.replace('collect_', ''))
 
-      {/* Step indicator */}
-      <div className="flex items-center gap-0">
-        {STEPS.map((label, i) => (
-          <div key={i} className="flex items-center flex-1">
-            <div className={clsx(
-              'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0',
-              i < step ? 'bg-cyan-600 text-white' :
-              i === step ? 'bg-cyan-600 text-white ring-4 ring-cyan-200' :
-              'bg-gray-200 text-gray-500'
-            )}>
-              {i < step ? '✓' : i + 1}
-            </div>
-            <span className={clsx('ml-2 text-xs font-medium', i === step ? 'text-cyan-700' : 'text-gray-400')}>
-              {label}
-            </span>
-            {i < STEPS.length - 1 && <div className="flex-1 h-px bg-gray-200 mx-3" />}
-          </div>
-        ))}
+  return (
+    <div className="page-stack max-w-5xl">
+      <div className="page-header">
+        <div>
+          <p className="page-kicker">New collection</p>
+          <h1 className="page-title">New Triage Job</h1>
+          <p className="page-subtitle">Build a focused collection plan and start it against selected nodes.</p>
+        </div>
       </div>
 
-      {/* Step content */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <StepIndicator step={step} />
 
-        {/* Step 0: Inventory */}
+      <section className="surface p-5 sm:p-6">
         {step === 0 && (
-          <div className="space-y-4">
-            <h2 className="text-base font-semibold text-gray-800">Select Inventory</h2>
-            <div className="flex gap-3">
+          <div className="space-y-5">
+            <StepHeading title="Select Inventory" subtitle="Use an existing inventory or upload a new one before choosing target nodes." />
+            <div className="inline-flex rounded-lg bg-slate-100 p-1">
               <button
                 onClick={() => setInvMode('existing')}
-                className={clsx('px-4 py-2 text-sm rounded-md border', invMode === 'existing' ? 'border-cyan-500 bg-cyan-50 text-cyan-700' : 'border-gray-300 text-gray-600')}
+                className={clsx('rounded-md px-3 py-2 text-sm font-semibold transition-all', invMode === 'existing' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-900')}
               >
                 Existing
               </button>
               <button
                 onClick={() => setInvMode('upload')}
-                className={clsx('px-4 py-2 text-sm rounded-md border', invMode === 'upload' ? 'border-cyan-500 bg-cyan-50 text-cyan-700' : 'border-gray-300 text-gray-600')}
+                className={clsx('rounded-md px-3 py-2 text-sm font-semibold transition-all', invMode === 'upload' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-900')}
               >
                 Upload New
               </button>
             </div>
 
             {invMode === 'existing' ? (
-              <div className="space-y-2">
+              <div className="grid gap-3">
                 {inventories.length === 0 && (
-                  <p className="text-sm text-gray-500">No inventories. Upload one first.</p>
+                  <p className="text-sm text-slate-500">No inventories. Upload one first.</p>
                 )}
                 {inventories.map((inv) => (
-                  <label key={inv.id} className={clsx(
-                    'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
-                    selectedInvId === inv.id ? 'border-cyan-500 bg-cyan-50' : 'border-gray-200 hover:border-cyan-300'
-                  )}>
+                  <label
+                    key={inv.id}
+                    className={clsx(
+                      'group flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all duration-200',
+                      selectedInvId === inv.id
+                        ? 'border-teal-400 bg-teal-50/70 ring-4 ring-teal-100'
+                        : 'border-slate-200 bg-white/80 hover:-translate-y-0.5 hover:border-teal-300'
+                    )}
+                  >
                     <input
                       type="radio"
                       name="inventory"
-                      className="accent-cyan-600"
+                      className="accent-teal-600"
                       checked={selectedInvId === inv.id}
                       onChange={() => { setSelectedInvId(inv.id); setSelectedNodes([]) }}
                     />
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{inv.name}</p>
-                      <p className="text-xs text-gray-400">{new Date(inv.created_at).toLocaleString()}</p>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 group-hover:bg-teal-50 group-hover:text-teal-700">
+                      <Database size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{inv.name}</p>
+                      <p className="mt-0.5 text-xs text-slate-400">{new Date(inv.created_at).toLocaleString()}</p>
                     </div>
                   </label>
                 ))}
@@ -135,27 +133,28 @@ export default function TriageNew() {
             ) : (
               <InventoryUploader onUploaded={(inv) => {
                 setSelectedInvId(inv.id)
+                setSelectedNodes([])
                 setInvMode('existing')
               }} />
             )}
           </div>
         )}
 
-        {/* Step 1: Node selection */}
         {step === 1 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-800">Select Nodes</h2>
+          <div className="space-y-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <StepHeading title="Select Nodes" subtitle={`${selectedNodes.length} of ${invNodes.length} nodes selected.`} />
               <div className="flex gap-2">
-                <button onClick={selectAll} className="text-xs text-cyan-600 hover:underline">Select all</button>
-                <span className="text-gray-300">|</span>
-                <button onClick={clearAll} className="text-xs text-gray-500 hover:underline">Clear</button>
+                <button onClick={selectAll} className="btn-secondary h-9">Select all</button>
+                <button onClick={clearAll} className="btn-ghost h-9">Clear</button>
               </div>
             </div>
             {nodesLoading ? (
-              <p className="text-sm text-gray-500">Loading nodes…</p>
+              <p className="text-sm text-slate-500">Loading nodes...</p>
+            ) : invNodes.length === 0 ? (
+              <div className="empty-state">No nodes in this inventory.</div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {invNodes.map((node) => (
                   <NodeStatusCard
                     key={node.id}
@@ -166,77 +165,119 @@ export default function TriageNew() {
                 ))}
               </div>
             )}
-            {selectedNodes.length > 0 && (
-              <p className="text-sm text-cyan-700 font-medium">{selectedNodes.length} node(s) selected</p>
-            )}
           </div>
         )}
 
-        {/* Step 2: Modules */}
         {step === 2 && (
-          <div className="space-y-4">
-            <h2 className="text-base font-semibold text-gray-800">Select Collection Modules</h2>
+          <div className="space-y-5">
+            <StepHeading title="Select Collection Modules" subtitle="Enable the modules required for this collection run." />
             <ModuleSelector value={modules} onChange={setModules} />
           </div>
         )}
 
-        {/* Step 3: Review */}
         {step === 3 && (
-          <div className="space-y-4">
-            <h2 className="text-base font-semibold text-gray-800">Review & Start</h2>
+          <div className="space-y-5">
+            <StepHeading title="Review and Start" subtitle="Name the job and confirm the inventory, nodes, and modules." />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Job Name</label>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-700">Job Name</label>
               <input
                 type="text"
                 placeholder={`Triage ${new Date().toLocaleString()}`}
                 value={jobName}
                 onChange={(e) => setJobName(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                className="input-field"
               />
             </div>
-            <div className="text-sm text-gray-700 space-y-1">
-              <p><span className="font-medium">Inventory ID:</span> {selectedInvId}</p>
-              <p><span className="font-medium">Nodes ({selectedNodes.length}):</span> {selectedNodes.map(n => n.ip_address).join(', ')}</p>
-              <p><span className="font-medium">Modules enabled:</span>{' '}
-                {Object.entries(modules)
-                  .filter(([, v]) => v)
-                  .map(([k]) => MODULE_LABELS[k] ?? k.replace('collect_', ''))
-                  .join(', ')}
-              </p>
+            <div className="grid gap-3 lg:grid-cols-3">
+              <ReviewItem label="Inventory ID" value={selectedInvId} />
+              <ReviewItem label="Nodes" value={selectedNodes.length} />
+              <ReviewItem label="Modules" value={enabledModules.length} />
+            </div>
+            <div className="surface-muted p-4 text-sm leading-6 text-slate-600">
+              <p><span className="font-semibold text-slate-800">Targets:</span> {selectedNodes.map(n => n.ip_address).join(', ')}</p>
+              <p><span className="font-semibold text-slate-800">Modules:</span> {enabledModules.join(', ') || 'None selected'}</p>
             </div>
             {isError && (
-              <p className="text-sm text-red-600">{error?.response?.data?.detail ?? 'Failed to start job'}</p>
+              <p className="rounded-md bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                {error?.response?.data?.detail ?? 'Failed to start job'}
+              </p>
             )}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Navigation */}
       <div className="flex justify-between">
         <button
           onClick={() => step > 0 ? setStep(step - 1) : navigate('/triage')}
-          className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+          className="btn-secondary"
         >
+          <ChevronLeft size={16} />
           {step === 0 ? 'Cancel' : 'Back'}
         </button>
         {step < STEPS.length - 1 ? (
           <button
             onClick={() => setStep(step + 1)}
             disabled={!canNext()}
-            className="px-4 py-2 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50"
+            className="btn-primary"
           >
             Next
+            <ChevronRight size={16} />
           </button>
         ) : (
           <button
             onClick={() => doCreate()}
             disabled={isPending}
-            className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+            className="btn-success"
           >
-            {isPending ? 'Starting…' : 'Start Triage'}
+            <Play size={16} />
+            {isPending ? 'Starting...' : 'Start Triage'}
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+function StepIndicator({ step }) {
+  return (
+    <div className="surface px-4 py-3">
+      <div className="grid gap-2 sm:grid-cols-4">
+        {STEPS.map((label, i) => (
+          <div
+            key={label}
+            className={clsx(
+              'flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
+              i === step ? 'bg-slate-950 text-white' : i < step ? 'bg-teal-50 text-teal-800' : 'text-slate-400'
+            )}
+          >
+            <span className={clsx(
+              'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+              i === step ? 'bg-white text-slate-950' : i < step ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'
+            )}>
+              {i < step ? <Check size={14} /> : i + 1}
+            </span>
+            <span className="text-sm font-semibold">{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function StepHeading({ title, subtitle }) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
+      <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+    </div>
+  )
+}
+
+function ReviewItem({ label, value }) {
+  return (
+    <div className="surface-muted p-4">
+      <p className="text-xs font-semibold uppercase text-slate-400">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-slate-950">{value}</p>
     </div>
   )
 }

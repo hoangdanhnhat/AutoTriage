@@ -1,15 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { listJobs } from '../api/triage'
-import { Plus, ChevronRight } from 'lucide-react'
+import { ChevronRight, Plus, ScanLine } from 'lucide-react'
 import clsx from 'clsx'
 
 const statusBadge = {
-  pending:   'bg-gray-100 text-gray-600',
-  running:   'bg-blue-100 text-blue-700',
-  completed: 'bg-green-100 text-green-700',
-  failed:    'bg-red-100 text-red-700',
-  partial:   'bg-yellow-100 text-yellow-700',
+  pending:   'bg-slate-100 text-slate-600 ring-slate-200',
+  running:   'bg-blue-50 text-blue-700 ring-blue-200',
+  completed: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  failed:    'bg-rose-50 text-rose-700 ring-rose-200',
+  partial:   'bg-amber-50 text-amber-700 ring-amber-200',
 }
 
 export default function TriageList() {
@@ -20,47 +20,53 @@ export default function TriageList() {
   })
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900">Triage Jobs</h1>
-        <Link
-          to="/triage/new"
-          className="flex items-center gap-2 px-3 py-2 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700"
-        >
-          <Plus size={15} />
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <p className="page-kicker">Collections</p>
+          <h1 className="page-title">Triage Jobs</h1>
+          <p className="page-subtitle">Review recent collection jobs, live progress, logs, and downloadable artifacts.</p>
+        </div>
+        <Link to="/triage/new" className="btn-primary">
+          <Plus size={16} />
           New Job
         </Link>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <div className="surface p-6 text-sm text-slate-500">Loading...</div>
       ) : jobs.length === 0 ? (
-        <div className="bg-white rounded-lg border border-dashed border-gray-300 p-10 text-center">
-          <p className="text-gray-400 text-sm">No triage jobs yet.</p>
-        </div>
+        <div className="empty-state">No triage jobs yet.</div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
-          {jobs.map((job) => (
-            <Link
-              key={job.id}
-              to={`/triage/${job.id}`}
-              className="flex items-center justify-between px-5 py-4 hover:bg-gray-50"
-            >
-              <div>
-                <p className="text-sm font-semibold text-gray-800">{job.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {new Date(job.created_at).toLocaleString()} &middot; {job.selected_nodes?.length ?? 0} nodes
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium capitalize', statusBadge[job.status] ?? statusBadge.pending)}>
-                  {job.status}
-                </span>
-                <ChevronRight size={16} className="text-gray-400" />
-              </div>
-            </Link>
-          ))}
-        </div>
+        <section className="surface overflow-hidden">
+          <div className="divide-y divide-slate-100">
+            {jobs.map((job) => (
+              <Link
+                key={job.id}
+                to={`/triage/${job.id}`}
+                className="group flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-slate-50/80"
+              >
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 group-hover:bg-teal-50 group-hover:text-teal-700">
+                    <ScanLine size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{job.name}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {new Date(job.created_at).toLocaleString()} / {job.selected_nodes?.length ?? 0} nodes
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className={clsx('status-pill ring-1', statusBadge[job.status] ?? statusBadge.pending)}>
+                    {job.status}
+                  </span>
+                  <ChevronRight size={16} className="text-slate-400 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   )

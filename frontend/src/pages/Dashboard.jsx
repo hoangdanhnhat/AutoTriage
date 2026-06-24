@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { listInventories, getInventoryNodes, checkInventoryStatus } from '../api/inventories'
 import NodeStatusCard from '../components/NodeStatusCard'
-import { RefreshCw, Play } from 'lucide-react'
+import { Activity, Database, Play, RefreshCw, Server } from 'lucide-react'
 
 export default function Dashboard() {
   const [selectedInvId, setSelectedInvId] = useState(null)
@@ -41,67 +41,71 @@ export default function Dashboard() {
   const offlineCount = nodes.filter((n) => n.status === 'offline').length
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-        <div className="flex gap-2">
-          {selectedInvId && (
-            <>
-              <button
-                onClick={() => checkStatus()}
-                disabled={checking}
-                className="flex items-center gap-2 px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-              >
-                <RefreshCw size={15} className={checking ? 'animate-spin' : ''} />
-                {checking ? 'Checking…' : 'Check Status'}
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <p className="page-kicker">Operations</p>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-subtitle">Select an inventory, check host reachability, then launch triage for the nodes that matter.</p>
+        </div>
+        {selectedInvId && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => checkStatus()}
+              disabled={checking}
+              className="btn-secondary"
+            >
+              <RefreshCw size={16} className={checking ? 'animate-spin' : ''} />
+              {checking ? 'Checking...' : 'Check Status'}
+            </button>
+            {selectedNodes.length > 0 && (
+              <button onClick={startTriage} className="btn-primary">
+                <Play size={16} />
+                Begin Triage ({selectedNodes.length})
               </button>
-              {selectedNodes.length > 0 && (
-                <button
-                  onClick={startTriage}
-                  className="flex items-center gap-2 px-3 py-2 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700"
-                >
-                  <Play size={15} />
-                  Begin Triage ({selectedNodes.length})
-                </button>
-              )}
-            </>
-          )}
+            )}
+          </div>
+        )}
+      </div>
+
+      <section className="surface p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-xl">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <Database size={17} className="text-teal-700" />
+              Active Inventory
+            </div>
+            <p className="mt-1 text-sm text-slate-500">Node status and selections are scoped to the selected inventory.</p>
+          </div>
+          <select
+            value={selectedInvId ?? ''}
+            onChange={(e) => { setSelectedInvId(Number(e.target.value) || null); setSelectedNodes([]) }}
+            className="select-field max-w-sm"
+          >
+            <option value="">Select an inventory</option>
+            {inventories.map((inv) => (
+              <option key={inv.id} value={inv.id}>{inv.name}</option>
+            ))}
+          </select>
         </div>
-      </div>
+      </section>
 
-      {/* Inventory selector */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Active Inventory</label>
-        <select
-          value={selectedInvId ?? ''}
-          onChange={(e) => { setSelectedInvId(Number(e.target.value) || null); setSelectedNodes([]) }}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full max-w-xs focus:outline-none focus:ring-2 focus:ring-cyan-400"
-        >
-          <option value="">— Select an inventory —</option>
-          {inventories.map((inv) => (
-            <option key={inv.id} value={inv.id}>{inv.name}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Stats */}
       {selectedInvId && nodes.length > 0 && (
-        <div className="flex gap-4">
-          <Stat label="Total Nodes" value={nodes.length} color="text-gray-700" />
-          <Stat label="Online" value={onlineCount} color="text-green-600" />
-          <Stat label="Offline" value={offlineCount} color="text-red-600" />
-          <Stat label="Selected" value={selectedNodes.length} color="text-cyan-600" />
-        </div>
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Stat label="Total Nodes" value={nodes.length} icon={Server} tone="slate" />
+          <Stat label="Online" value={onlineCount} icon={Activity} tone="emerald" />
+          <Stat label="Offline" value={offlineCount} icon={Activity} tone="rose" />
+          <Stat label="Selected" value={selectedNodes.length} icon={Play} tone="teal" />
+        </section>
       )}
 
-      {/* Node grid */}
-      {selectedInvId && (
+      {selectedInvId ? (
         nodesLoading ? (
-          <p className="text-sm text-gray-500">Loading nodes…</p>
+          <div className="surface p-6 text-sm text-slate-500">Loading nodes...</div>
         ) : nodes.length === 0 ? (
-          <p className="text-sm text-gray-500">No nodes in this inventory.</p>
+          <div className="empty-state">No nodes in this inventory.</div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
             {nodes.map((node) => (
               <NodeStatusCard
                 key={node.id}
@@ -110,24 +114,32 @@ export default function Dashboard() {
                 onToggle={toggleNode}
               />
             ))}
-          </div>
+          </section>
         )
-      )}
-
-      {!selectedInvId && (
-        <div className="bg-white rounded-lg border border-dashed border-gray-300 p-10 text-center">
-          <p className="text-gray-400 text-sm">Select an inventory to view nodes</p>
-        </div>
+      ) : (
+        <div className="empty-state">Select an inventory to view nodes.</div>
       )}
     </div>
   )
 }
 
-function Stat({ label, value, color }) {
+function Stat({ label, value, icon: Icon, tone }) {
+  const toneClass = {
+    slate: 'bg-slate-100 text-slate-700',
+    emerald: 'bg-emerald-50 text-emerald-700',
+    rose: 'bg-rose-50 text-rose-700',
+    teal: 'bg-teal-50 text-teal-700',
+  }[tone]
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200 px-5 py-3 min-w-[100px] text-center">
-      <p className={`text-2xl font-bold ${color}`}>{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+    <div className="surface flex items-center justify-between p-4">
+      <div>
+        <p className="text-xs font-semibold uppercase text-slate-400">{label}</p>
+        <p className="mt-1 text-2xl font-semibold text-slate-950">{value}</p>
+      </div>
+      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${toneClass}`}>
+        <Icon size={18} />
+      </div>
     </div>
   )
 }
