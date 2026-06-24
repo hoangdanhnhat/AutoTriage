@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { listInventories, getInventoryNodes, checkInventoryStatus } from '../api/inventories'
@@ -15,6 +15,13 @@ export default function Dashboard() {
     queryKey: ['inventories'],
     queryFn: listInventories,
   })
+
+  useEffect(() => {
+    if (inventories.length === 1 && !selectedInvId) {
+      setSelectedInvId(inventories[0].id)
+      setSelectedNodes([])
+    }
+  }, [inventories, selectedInvId])
 
   const { data: nodes = [], isLoading: nodesLoading } = useQuery({
     queryKey: ['inventory-nodes', selectedInvId],
@@ -46,7 +53,11 @@ export default function Dashboard() {
         <div>
           <p className="page-kicker">Operations</p>
           <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Select an inventory, check host reachability, then launch triage for the nodes that matter.</p>
+          <p className="page-subtitle">
+            {inventories.length === 1
+              ? 'Check host reachability, select target nodes, then launch triage.'
+              : 'Select an inventory, check host reachability, then launch triage for the nodes that matter.'}
+          </p>
         </div>
         {selectedInvId && (
           <div className="flex flex-wrap gap-2">
@@ -77,16 +88,22 @@ export default function Dashboard() {
             </div>
             <p className="mt-1 text-sm text-slate-500">Node status and selections are scoped to the selected inventory.</p>
           </div>
-          <select
-            value={selectedInvId ?? ''}
-            onChange={(e) => { setSelectedInvId(Number(e.target.value) || null); setSelectedNodes([]) }}
-            className="select-field max-w-sm"
-          >
-            <option value="">Select an inventory</option>
-            {inventories.map((inv) => (
-              <option key={inv.id} value={inv.id}>{inv.name}</option>
-            ))}
-          </select>
+          {inventories.length === 1 ? (
+            <div className="max-w-sm rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
+              {inventories[0].name}
+            </div>
+          ) : (
+            <select
+              value={selectedInvId ?? ''}
+              onChange={(e) => { setSelectedInvId(Number(e.target.value) || null); setSelectedNodes([]) }}
+              className="select-field max-w-sm"
+            >
+              <option value="">Select an inventory</option>
+              {inventories.map((inv) => (
+                <option key={inv.id} value={inv.id}>{inv.name}</option>
+              ))}
+            </select>
+          )}
         </div>
       </section>
 

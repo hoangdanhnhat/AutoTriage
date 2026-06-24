@@ -15,8 +15,9 @@ export default function TriageNew() {
   const navigate = useNavigate()
   const location = useLocation()
   const locationState = location.state ?? {}
+  const hasPreselectedNodes = !!locationState.inventoryId && (locationState.selectedNodes?.length ?? 0) > 0
 
-  const [step, setStep] = useState(0)
+  const [step, setStep] = useState(hasPreselectedNodes ? 2 : 0)
   const [invMode, setInvMode] = useState('existing')
   const [selectedInvId, setSelectedInvId] = useState(locationState.inventoryId ?? null)
   const [selectedNodes, setSelectedNodes] = useState(locationState.selectedNodes ?? [])
