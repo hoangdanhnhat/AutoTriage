@@ -3,11 +3,11 @@ import clsx from 'clsx'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
 const nodeStatusConfig = {
-  pending:   { badge: 'bg-gray-100 text-gray-600',   label: 'Pending' },
-  running:   { badge: 'bg-blue-100 text-blue-700',   label: 'Running' },
-  completed: { badge: 'bg-green-100 text-green-700', label: 'Completed' },
-  failed:    { badge: 'bg-red-100 text-red-700',     label: 'Failed' },
-  skipped:   { badge: 'bg-yellow-100 text-yellow-700', label: 'Skipped' },
+  pending:   { badge: 'bg-slate-100 text-slate-600 ring-slate-200', label: 'Pending' },
+  running:   { badge: 'bg-blue-50 text-blue-700 ring-blue-200', label: 'Running' },
+  completed: { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', label: 'Completed' },
+  failed:    { badge: 'bg-rose-50 text-rose-700 ring-rose-200', label: 'Failed' },
+  skipped:   { badge: 'bg-amber-50 text-amber-700 ring-amber-200', label: 'Skipped' },
 }
 
 function NodeRow({ ns }) {
@@ -20,30 +20,33 @@ function NodeRow({ ns }) {
           (new Date(ns.completed_at) - new Date(ns.started_at)) / 1000
         ) + 's'
       : ns.started_at
-      ? 'running…'
-      : '—'
+      ? 'running...'
+      : '-'
 
   return (
     <>
-      <tr className="hover:bg-gray-50 transition-colors">
-        <td className="px-4 py-3 font-mono text-sm">{ns.ip_address}</td>
-        <td className="px-4 py-3 text-sm text-gray-600">{ns.hostname ?? '—'}</td>
+      <tr className="table-row">
         <td className="px-4 py-3">
-          <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', cfg.badge)}>
+          <span className="mono-value">{ns.ip_address}</span>
+        </td>
+        <td className="px-4 py-3 text-sm text-slate-600">{ns.hostname ?? '-'}</td>
+        <td className="px-4 py-3">
+          <span className={clsx('status-pill ring-1', cfg.badge)}>
+            {ns.status === 'running' && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-soft-pulse" />}
             {cfg.label}
           </span>
         </td>
-        <td className="px-4 py-3 text-sm text-gray-500">{duration}</td>
+        <td className="px-4 py-3 text-sm text-slate-500">{duration}</td>
         <td className="px-4 py-3">
           {ns.artifact_path && (
-            <span className="text-xs text-cyan-600 font-medium">ZIP ready</span>
+            <span className="status-pill bg-teal-50 text-teal-700 ring-1 ring-teal-200">ZIP ready</span>
           )}
         </td>
         <td className="px-4 py-3">
           {ns.output_log && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800"
+              className="muted-link text-xs text-slate-500"
             >
               {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               Log
@@ -53,8 +56,8 @@ function NodeRow({ ns }) {
       </tr>
       {expanded && ns.output_log && (
         <tr>
-          <td colSpan={6} className="px-4 pb-3">
-            <pre className="bg-gray-900 text-green-400 text-xs p-3 rounded overflow-auto max-h-48 whitespace-pre-wrap">
+          <td colSpan={6} className="px-4 pb-4">
+            <pre className="max-h-56 overflow-auto rounded-lg bg-slate-950 p-4 text-xs leading-5 text-emerald-300 shadow-inner shadow-black/30 whitespace-pre-wrap">
               {ns.output_log}
             </pre>
           </td>
@@ -65,7 +68,6 @@ function NodeRow({ ns }) {
 }
 
 export default function TriageProgressTable({ nodeStatuses, liveData }) {
-  // Merge live updates into node statuses for display
   const merged = nodeStatuses.map((ns) => {
     const live = liveData?.[ns.ip_address]
     if (!live) return ns
@@ -73,9 +75,9 @@ export default function TriageProgressTable({ nodeStatuses, liveData }) {
   })
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
+    <div className="table-shell overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+        <thead className="table-head">
           <tr>
             <th className="px-4 py-3 text-left">IP Address</th>
             <th className="px-4 py-3 text-left">Hostname</th>
@@ -85,13 +87,13 @@ export default function TriageProgressTable({ nodeStatuses, liveData }) {
             <th className="px-4 py-3 text-left">Log</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-slate-100">
           {merged.map((ns) => (
             <NodeRow key={ns.id} ns={ns} />
           ))}
           {merged.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-6 text-center text-gray-400 text-sm">
+              <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">
                 No nodes
               </td>
             </tr>

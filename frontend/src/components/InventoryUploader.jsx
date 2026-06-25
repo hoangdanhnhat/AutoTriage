@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { uploadInventory } from '../api/inventories'
-import { Upload } from 'lucide-react'
+import { FileText, Upload } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function InventoryUploader({ onUploaded }) {
@@ -36,16 +36,21 @@ export default function InventoryUploader({ onUploaded }) {
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
         className={clsx(
-          'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors',
-          dragging ? 'border-cyan-500 bg-cyan-50' : 'border-gray-300 hover:border-cyan-400'
+          'group cursor-pointer rounded-lg border border-dashed p-7 text-center transition-all duration-200',
+          dragging
+            ? 'border-teal-400 bg-teal-50 shadow-sm shadow-teal-900/10'
+            : 'border-slate-300 bg-white/70 hover:-translate-y-0.5 hover:border-teal-400 hover:bg-white'
         )}
       >
-        <Upload size={28} className="mx-auto mb-2 text-gray-400" />
-        {file
-          ? <p className="text-sm text-gray-700 font-medium">{file.name}</p>
-          : <p className="text-sm text-gray-500">Drop inventory file here or click to browse</p>
-        }
-        <p className="text-xs text-gray-400 mt-1">Ansible INI format (.ini, .txt)</p>
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition-colors group-hover:bg-teal-50 group-hover:text-teal-700">
+          {file ? <FileText size={24} /> : <Upload size={24} />}
+        </div>
+        {file ? (
+          <p className="text-sm font-semibold text-slate-800">{file.name}</p>
+        ) : (
+          <p className="text-sm font-medium text-slate-700">Drop inventory file here or click to browse</p>
+        )}
+        <p className="mt-1 text-xs text-slate-400">Ansible INI format (.ini, .txt)</p>
         <input
           ref={inputRef}
           type="file"
@@ -56,26 +61,28 @@ export default function InventoryUploader({ onUploaded }) {
       </div>
 
       {file && (
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input
             type="text"
             placeholder="Inventory name (optional)"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+            className="input-field flex-1"
           />
           <button
             onClick={() => mutate()}
             disabled={isPending}
-            className="px-4 py-2 bg-cyan-600 text-white text-sm rounded-md hover:bg-cyan-700 disabled:opacity-50"
+            className="btn-primary"
           >
-            {isPending ? 'Uploading…' : 'Upload'}
+            {isPending ? 'Uploading...' : 'Upload'}
           </button>
         </div>
       )}
 
       {isError && (
-        <p className="text-sm text-red-600">{error?.response?.data?.detail ?? 'Upload failed'}</p>
+        <p className="text-sm font-medium text-rose-600">
+          {error?.response?.data?.detail ?? 'Upload failed'}
+        </p>
       )}
     </div>
   )

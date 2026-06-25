@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, Scan, LogOut } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, Scan, LogOut, ShieldCheck } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import clsx from 'clsx'
 
@@ -20,36 +20,45 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="flex flex-col w-56 min-h-screen bg-gray-900 text-gray-100">
-      <div className="px-6 py-5 border-b border-gray-700">
-        <span className="text-lg font-bold tracking-wide text-cyan-400">ForensicsIR</span>
+    <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-slate-900/10 bg-slate-950 text-slate-100 shadow-2xl shadow-slate-950/10">
+      <div className="px-5 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-500/15 text-teal-300 ring-1 ring-teal-400/20">
+            <ShieldCheck size={20} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">Forensics IR</p>
+            <p className="text-xs text-slate-400">Auto triage console</p>
+          </div>
+        </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 space-y-1 px-3 py-2">
         {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
               clsx(
-                'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                'group flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-200',
                 isActive
-                  ? 'bg-cyan-700 text-white'
-                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                  ? 'bg-white text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:bg-white/10 hover:text-white'
               )
             }
           >
-            <Icon size={18} />
+            <Icon size={18} className="shrink-0" />
             {label}
           </NavLink>
         ))}
       </nav>
 
-      <div className="px-4 py-4 border-t border-gray-700 text-sm">
-        <p className="text-gray-400 truncate">{user?.username}</p>
+      <div className="m-3 rounded-lg border border-white/10 bg-white/5 p-3 text-sm">
+        <p className="truncate text-xs uppercase text-slate-500">Signed in</p>
+        <p className="mt-1 truncate font-medium text-slate-200">{user?.username}</p>
         <button
           onClick={handleLogout}
-          className="mt-2 flex items-center gap-2 text-gray-400 hover:text-red-400 transition-colors"
+          className="mt-3 flex w-full items-center gap-2 rounded-md px-2 py-2 text-slate-400 transition-colors hover:bg-rose-500/10 hover:text-rose-300"
         >
           <LogOut size={16} />
           Sign out

@@ -2,7 +2,6 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
-    network_mode: "host"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -18,7 +17,6 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    network_mode: "host"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -29,13 +27,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      network: host
     restart: unless-stopped
-    network_mode: "host"
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}
-      REDIS_URL: redis://127.0.0.1:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
       ANSIBLE_SSH_KEY_PATH: ${ANSIBLE_SSH_KEY_PATH:-/root/.ssh/ansible}
@@ -60,14 +56,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    ports:
+      - "8000:8000"
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      network: host
     restart: unless-stopped
-    network_mode: "host"
+    ports:
+      - "80:80"
     depends_on:
       - backend
 

@@ -113,25 +113,31 @@ export default function ModuleSelector({ value, onChange }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {MODULE_GROUPS.map((group) => (
         <section key={group.title} className="space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">{group.title}</h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+            <h3 className="section-title">{group.title}</h3>
+            <span className="text-xs font-medium text-slate-400">
+              {group.modules.filter((m) => value[m.key]).length} selected
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {group.modules.map((m) => (
               <label
                 key={m.key}
-                className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:border-cyan-300 transition-colors"
+                className="group flex min-h-[104px] cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-white/80 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-sm hover:shadow-slate-200/80 has-[:checked]:border-teal-400 has-[:checked]:bg-teal-50/70 has-[:checked]:ring-4 has-[:checked]:ring-teal-100"
               >
                 <input
                   type="checkbox"
-                  className="mt-0.5 accent-cyan-600"
+                  className="peer sr-only"
                   checked={!!value[m.key]}
                   onChange={() => toggle(m.key)}
                 />
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{m.label}</p>
-                  <p className="text-xs text-gray-500">{m.desc}</p>
+                <span className="mt-0.5 h-5 w-9 shrink-0 rounded-full bg-slate-200 p-0.5 transition-colors after:block after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:bg-teal-600 peer-checked:after:translate-x-4" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">{m.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">{m.desc}</p>
                 </div>
               </label>
             ))}

@@ -4,15 +4,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getJob, listArtifacts, downloadArtifact } from '../api/triage'
 import { useTriageWebSocket } from '../hooks/useTriageWebSocket'
 import TriageProgressTable from '../components/TriageProgressTable'
-import { ArrowLeft, Download, Terminal } from 'lucide-react'
+import { ArrowLeft, CalendarClock, Download, Package, Terminal } from 'lucide-react'
 import clsx from 'clsx'
 
 const statusBadge = {
-  pending:   'bg-gray-100 text-gray-600',
-  running:   'bg-blue-100 text-blue-700',
-  completed: 'bg-green-100 text-green-700',
-  failed:    'bg-red-100 text-red-700',
-  partial:   'bg-yellow-100 text-yellow-700',
+  pending:   'bg-slate-100 text-slate-600 ring-slate-200',
+  running:   'bg-blue-50 text-blue-700 ring-blue-200',
+  completed: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  failed:    'bg-rose-50 text-rose-700 ring-rose-200',
+  partial:   'bg-amber-50 text-amber-700 ring-amber-200',
 }
 
 export default function TriageDetail() {
@@ -20,10 +20,9 @@ export default function TriageDetail() {
   const jobId = Number(id)
   const qc = useQueryClient()
 
-  // Live per-node state: { [ip]: { status, task, logs: string[] } }
   const [liveData, setLiveData] = useState({})
   const [jobStatus, setJobStatus] = useState(null)
-  const [liveLogs, setLiveLogs] = useState({})  // ip -> log lines
+  const [liveLogs, setLiveLogs] = useState({})
 
   const { data: job, isLoading } = useQuery({
     queryKey: ['triage-job', jobId],
@@ -70,88 +69,111 @@ export default function TriageDetail() {
     window.URL.revokeObjectURL(blobUrl)
   }
 
-  if (isLoading) return <p className="text-sm text-gray-500">Loading…</p>
-  if (!job) return <p className="text-sm text-red-500">Job not found.</p>
+  if (isLoading) return <div className="page-stack"><div className="surface p-6 text-sm text-slate-500">Loading...</div></div>
+  if (!job) return <div className="page-stack"><div className="surface p-6 text-sm text-rose-600">Job not found.</div></div>
+
+  const modules = Object.entries(job.selected_modules ?? {})
+    .filter(([, v]) => v)
+    .map(([k]) => k.replace('collect_', ''))
+    .join(', ')
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <Link to="/triage" className="text-gray-400 hover:text-gray-600">
-          <ArrowLeft size={20} />
-        </Link>
-        <h1 className="text-xl font-bold text-gray-900">{job.name}</h1>
-        <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium capitalize', statusBadge[currentStatus] ?? statusBadge.pending)}>
-          {currentStatus}
-        </span>
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <Link to="/triage" className="muted-link mb-3 text-slate-500">
+            <ArrowLeft size={16} />
+            Triage Jobs
+          </Link>
+          <p className="page-kicker">Job detail</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="page-title">{job.name}</h1>
+            <span className={clsx('status-pill ring-1', statusBadge[currentStatus] ?? statusBadge.pending)}>
+              {currentStatus === 'running' && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-soft-pulse" />}
+              {currentStatus}
+            </span>
+          </div>
+          <p className="page-subtitle">{modules || 'No modules selected'}</p>
+        </div>
       </div>
 
-      {/* Meta */}
-      <div className="bg-white rounded-lg border border-gray-200 px-5 py-4 text-sm text-gray-600 space-y-1">
-        <p><span className="font-medium">Created:</span> {new Date(job.created_at).toLocaleString()}</p>
-        {job.started_at && <p><span className="font-medium">Started:</span> {new Date(job.started_at).toLocaleString()}</p>}
-        {job.completed_at && <p><span className="font-medium">Completed:</span> {new Date(job.completed_at).toLocaleString()}</p>}
-        <p>
-          <span className="font-medium">Modules:</span>{' '}
-          {Object.entries(job.selected_modules ?? {})
-            .filter(([, v]) => v)
-            .map(([k]) => k.replace('collect_', ''))
-            .join(', ')}
-        </p>
-      </div>
+      <section className="grid gap-3 lg:grid-cols-3">
+        <MetaItem icon={CalendarClock} label="Created" value={new Date(job.created_at).toLocaleString()} />
+        <MetaItem icon={CalendarClock} label="Started" value={job.started_at ? new Date(job.started_at).toLocaleString() : '-'} />
+        <MetaItem icon={CalendarClock} label="Completed" value={job.completed_at ? new Date(job.completed_at).toLocaleString() : '-'} />
+      </section>
 
-      {/* Node progress */}
-      <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-2">Node Progress</h2>
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="section-title">Node Progress</h2>
+        </div>
         <TriageProgressTable
           nodeStatuses={job.node_statuses ?? []}
           liveData={liveData}
         />
-      </div>
+      </section>
 
-      {/* Live log stream */}
       {Object.keys(liveLogs).length > 0 && (
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-            <Terminal size={15} />
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 section-title">
+            <Terminal size={16} className="text-teal-700" />
             Live Logs
           </h2>
-          <div className="space-y-3">
+          <div className="grid gap-3 xl:grid-cols-2">
             {Object.entries(liveLogs).map(([ip, lines]) => (
-              <div key={ip}>
-                <p className="text-xs font-mono text-gray-500 mb-1">{ip}</p>
-                <pre className="bg-gray-900 text-green-400 text-xs p-3 rounded overflow-auto max-h-48 whitespace-pre-wrap">
+              <div key={ip} className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950 shadow-sm shadow-slate-300/40">
+                <div className="border-b border-white/10 px-4 py-2 font-mono text-xs text-slate-400">{ip}</div>
+                <pre className="max-h-60 overflow-auto p-4 text-xs leading-5 text-emerald-300 whitespace-pre-wrap">
                   {lines.join('\n')}
                 </pre>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Artifacts */}
       {artifacts?.files?.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">Artifacts</h2>
-          <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
-            {artifacts.files.map((f) => (
-              <div key={f.path} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <p className="text-sm font-mono text-gray-700">{f.path}</p>
-                  <p className="text-xs text-gray-400">{(f.size / 1024).toFixed(1)} KB</p>
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 section-title">
+            <Package size={16} className="text-teal-700" />
+            Artifacts
+          </h2>
+          <div className="surface overflow-hidden">
+            <div className="divide-y divide-slate-100">
+              {artifacts.files.map((f) => (
+                <div key={f.path} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-sm text-slate-800">{f.path}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">{(f.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(f.path)}
+                    className="btn-secondary h-9 self-start sm:self-center"
+                  >
+                    <Download size={15} />
+                    Download
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDownload(f.path)}
-                  className="flex items-center gap-1 text-xs text-cyan-600 hover:underline"
-                >
-                  <Download size={14} />
-                  Download
-                </button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
       )}
+    </div>
+  )
+}
+
+function MetaItem({ icon: Icon, label, value }) {
+  return (
+    <div className="surface flex items-center gap-3 p-4">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+        <Icon size={18} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase text-slate-400">{label}</p>
+        <p className="mt-1 truncate text-sm font-semibold text-slate-900">{value}</p>
+      </div>
     </div>
   )
 }

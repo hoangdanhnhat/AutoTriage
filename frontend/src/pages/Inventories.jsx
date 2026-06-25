@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { listInventories, deleteInventory } from '../api/inventories'
 import InventoryUploader from '../components/InventoryUploader'
-import { Trash2, ChevronRight, Plus } from 'lucide-react'
+import { ChevronRight, Database, Plus, Trash2 } from 'lucide-react'
 
 export default function Inventories() {
   const [showUpload, setShowUpload] = useState(false)
@@ -24,58 +24,73 @@ export default function Inventories() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900">Inventories</h1>
+    <div className="page-stack">
+      <div className="page-header">
+        <div>
+          <p className="page-kicker">Assets</p>
+          <h1 className="page-title">Inventories</h1>
+          <p className="page-subtitle">Upload Ansible inventories and inspect the nodes available for collection.</p>
+        </div>
         <button
           onClick={() => setShowUpload(!showUpload)}
-          className="flex items-center gap-2 px-3 py-2 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700"
+          className="btn-primary"
         >
-          <Plus size={15} />
+          <Plus size={16} />
           Upload Inventory
         </button>
       </div>
 
       {showUpload && (
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Upload Ansible Inventory</h2>
+        <section className="surface p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="section-title">Upload Ansible Inventory</h2>
+              <p className="mt-1 text-sm text-slate-500">Accepted formats: INI and plain text.</p>
+            </div>
+          </div>
           <InventoryUploader onUploaded={() => setShowUpload(false)} />
-        </div>
+        </section>
       )}
 
       {isLoading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <div className="surface p-6 text-sm text-slate-500">Loading...</div>
       ) : inventories.length === 0 ? (
-        <div className="bg-white rounded-lg border border-dashed border-gray-300 p-10 text-center">
-          <p className="text-gray-400 text-sm">No inventories yet. Upload one to get started.</p>
-        </div>
+        <div className="empty-state">No inventories yet. Upload one to get started.</div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
-          {inventories.map((inv) => (
-            <div key={inv.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50">
-              <div>
-                <p className="text-sm font-semibold text-gray-800">{inv.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {new Date(inv.created_at).toLocaleString()}
-                </p>
+        <section className="surface overflow-hidden">
+          <div className="divide-y divide-slate-100">
+            {inventories.map((inv) => (
+              <div key={inv.id} className="group flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-slate-50/80">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 group-hover:bg-teal-50 group-hover:text-teal-700">
+                    <Database size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{inv.name}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      {new Date(inv.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Link
+                    to={`/inventories/${inv.id}`}
+                    className="muted-link"
+                  >
+                    View <ChevronRight size={15} />
+                  </Link>
+                  <button
+                    onClick={() => confirmDelete(inv)}
+                    className="icon-button hover:bg-rose-50 hover:text-rose-600"
+                    aria-label={`Delete ${inv.name}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Link
-                  to={`/inventories/${inv.id}`}
-                  className="flex items-center gap-1 text-xs text-cyan-600 hover:underline"
-                >
-                  View <ChevronRight size={13} />
-                </Link>
-                <button
-                  onClick={() => confirmDelete(inv)}
-                  className="text-gray-400 hover:text-red-500 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   )
