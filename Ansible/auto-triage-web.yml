@@ -112,7 +112,7 @@
         python3 -u main.py
       register: triage_output
       become: "{{ ansible_become | default(false) | bool }}"
-      timeout: 1800
+      timeout: 9000
       failed_when: false
 
     - name: 6. Locate generated artifact (compressed TAR/ZIP file)
